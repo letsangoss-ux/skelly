@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>La Team Skelly</title>
+<title>Animateur — Le Quiz des Sacs</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -50,11 +50,11 @@
           <div class="timer-num" id="timer-num">20</div>
         </div>
       </div>
-      <div id="q-hint-banner" class="hint-banner hidden"></div>
-      <div class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
+      <div id="q-multi-banner" class="info-banner hidden">🔢 Cette question peut avoir plusieurs bonnes réponses</div>
+      <h2 id="q-text" class="title-xl" style="text-align:center; margin-bottom:14px; font-size:1.5rem;"></h2>
+      <div id="q-photo-frame" class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
       <div style="text-align:center; margin-bottom:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button class="btn-expand" id="btn-expand-photo">⛶ Plein écran</button>
-        <button class="btn-expand" id="btn-show-hint">💡 Afficher l'indice</button>
         <button class="btn-expand" id="btn-toggle-pause">⏸ Pause</button>
       </div>
       <div class="answers-grid" id="q-answers-host"></div>
@@ -94,7 +94,10 @@
   </div>
 
   <audio id="bg-music" loop></audio>
-  <button class="change-avatar-btn hidden" id="btn-toggle-music" style="position:fixed; top:16px; right:16px; z-index:50;">🔊 Musique</button>
+  <div class="music-control hidden" id="music-control">
+    <button class="music-mute-btn" id="btn-toggle-music">🔊</button>
+    <input type="range" id="music-volume" min="0" max="100" value="60">
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

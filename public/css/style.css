@@ -631,19 +631,6 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 }
 .btn-expand:hover { background: var(--gold-soft); }
 
-/* ---------- HINT ---------- */
-.hint-banner {
-  background: rgba(198,166,100,0.12);
-  border: 1px solid var(--gold);
-  border-radius: 12px;
-  padding: 12px 18px;
-  text-align: center;
-  color: var(--gold);
-  font-weight: 600;
-  margin-bottom: 16px;
-  animation: popIn 0.3s ease both;
-}
-
 /* ---------- PAUSE OVERLAY ---------- */
 .pause-overlay {
   position: fixed;
@@ -740,12 +727,129 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 .award-text { font-size: 0.9rem; color: var(--cream-dim); }
 .award-text strong { color: var(--cream); }
 
-/* ---------- ANSWER CHECKBOX (admin) ---------- */
+/* ---------- ANSWER CHECKBOX (admin) — checkbox personnalisée ---------- */
 .qc-answer-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .qc-answer-row input[type=text] { flex: 1; }
-.qc-answer-row label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--cream-dim); white-space: nowrap; }
+
+.qc-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--cream-dim);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(198,166,100,0.25);
+  transition: all 0.15s ease;
+}
+.qc-checkbox-label input[type=checkbox] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.qc-checkbox-visual {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid rgba(198,166,100,0.5);
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.15s ease;
+}
+.qc-checkbox-visual::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.qc-checkbox-label:has(input:checked) {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.qc-checkbox-label:has(input:checked) .qc-checkbox-visual {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.qc-checkbox-label:has(input:checked) .qc-checkbox-visual::after { opacity: 1; }
+/* Compatibilité navigateurs sans :has() : une classe "checked" est aussi basculée en JS */
+.qc-checkbox-label.checked { background: var(--gold-soft); border-color: var(--gold); color: var(--gold); }
+.qc-checkbox-label.checked .qc-checkbox-visual { background: var(--gold); border-color: var(--gold); }
+.qc-checkbox-label.checked .qc-checkbox-visual::after { opacity: 1; }
 
 .qc-order-btns { display: flex; flex-direction: column; gap: 4px; }
+.qc-remove-photo { margin-top: 4px; font-size: 0.72rem; }
+
+/* ---------- VOLUME SLIDER ---------- */
+.music-control {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(22,19,15,0.9);
+  border: 1px solid rgba(198,166,100,0.3);
+  border-radius: 999px;
+  padding: 8px 16px;
+}
+.music-control input[type=range] {
+  -webkit-appearance: none;
+  width: 90px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(198,166,100,0.3);
+  outline: none;
+}
+.music-control input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+}
+.music-control input[type=range]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: none;
+  cursor: pointer;
+}
+.music-control .music-mute-btn {
+  background: none;
+  border: none;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+/* ---------- INFO BANNER (indice retiré, réutilisé pour "réponses multiples") ---------- */
+.info-banner {
+  background: rgba(198,166,100,0.12);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 10px 18px;
+  text-align: center;
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  animation: popIn 0.3s ease both;
+}
 
 /* ---------- GLOBAL LEADERBOARD ---------- */
 .global-lb-row {

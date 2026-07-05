@@ -172,8 +172,15 @@ socket.on('question:show', (q) => {
   showScreen('play');
   document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('p-waiting-msg').classList.add('hidden');
-  document.getElementById('p-image').src = q.image;
-  document.getElementById('p-hint-banner').classList.add('hidden');
+  document.getElementById('p-multi-banner').classList.toggle('hidden', !q.multipleAnswers);
+
+  const questionTextEl = document.getElementById('p-question-text');
+  questionTextEl.textContent = q.text || '';
+  questionTextEl.classList.toggle('hidden', !q.text);
+
+  const photoFrame = document.getElementById('p-photo-frame');
+  if (q.image) { document.getElementById('p-image').src = q.image; photoFrame.classList.remove('hidden'); }
+  else photoFrame.classList.add('hidden');
 
   const wrap = document.getElementById('p-answers');
   wrap.innerHTML = '';
@@ -187,12 +194,6 @@ socket.on('question:show', (q) => {
   });
 
   startTimer(q.duration);
-});
-
-socket.on('question:hint', ({ hint }) => {
-  const banner = document.getElementById('p-hint-banner');
-  banner.textContent = `💡 Indice : ${hint}`;
-  banner.classList.remove('hidden');
 });
 
 socket.on('game:paused', () => { paused = true; clearInterval(timerInterval); });

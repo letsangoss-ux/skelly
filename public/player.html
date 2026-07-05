@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>La Team Skelly</title>
+<title>Joueur — Le Quiz des Sacs</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -12,14 +12,14 @@
   <div id="screen-join" class="screen">
     <div class="card">
       <div class="eyebrow" style="text-align:center;display:block;">Rejoindre la partie</div>
-      <h1 class="title-xl" style="text-align:center;">La Team Skelly</h1>
+      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
       <div class="field">
         <label for="input-code">Code de la partie</label>
         <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
       </div>
       <div class="field">
         <label for="input-pseudo">Ton pseudo</label>
-        <input type="text" id="input-pseudo" placeholder="..." maxlength="16" autocomplete="off">
+        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
       </div>
       <div class="field">
         <label>Choisis ton avatar</label>
@@ -61,8 +61,9 @@
           <div class="timer-num" id="p-timer-num">20</div>
         </div>
       </div>
-      <div id="p-hint-banner" class="hint-banner hidden"></div>
-      <div class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
+      <div id="p-multi-banner" class="info-banner hidden">🔢 Plusieurs bonnes réponses possibles</div>
+      <h2 id="p-question-text" class="title-xl hidden" style="text-align:center; margin-bottom:14px; font-size:1.3rem;"></h2>
+      <div id="p-photo-frame" class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
       <div class="answers-grid" id="p-answers"></div>
       <div class="waiting-msg hidden" id="p-waiting-msg">Réponse envoyée, patiente...</div>
       <div class="reaction-bar" id="reaction-bar">

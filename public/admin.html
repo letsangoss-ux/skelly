@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>La Team Skelly</title>
+<title>Tableau de bord — Le Quiz des Sacs</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -125,27 +125,28 @@
           <img class="qc-photo-preview hidden">
           <label class="qc-upload-label">
             <input type="file" accept="image/*" class="qc-photo-input hidden">
-            <span>Choisir une photo</span>
+            <span>Choisir une photo (facultatif)</span>
           </label>
+          <button class="icon-btn qc-remove-photo hidden" type="button">✕ Retirer la photo</button>
         </div>
         <div class="qc-fields">
-          <div class="field"><label>Indice (optionnel)</label><input type="text" class="qc-hint" placeholder="Ex : C'est une maison française."></div>
+          <div class="field"><label>Intitulé de la question</label><input type="text" class="qc-question-text" placeholder="Ex : Quel est ce sac ?"></div>
 
           <div class="qc-answer-row">
             <input type="text" class="qc-answer qc-answer-0" placeholder="Réponse 1">
-            <label><input type="checkbox" class="qc-correct-check qc-correct-0"> bonne réponse</label>
+            <label class="qc-checkbox-label"><input type="checkbox" class="qc-correct-check qc-correct-0"><span class="qc-checkbox-visual"></span> bonne réponse</label>
           </div>
           <div class="qc-answer-row">
             <input type="text" class="qc-answer qc-answer-1" placeholder="Réponse 2">
-            <label><input type="checkbox" class="qc-correct-check qc-correct-1"> bonne réponse</label>
+            <label class="qc-checkbox-label"><input type="checkbox" class="qc-correct-check qc-correct-1"><span class="qc-checkbox-visual"></span> bonne réponse</label>
           </div>
           <div class="qc-answer-row">
             <input type="text" class="qc-answer qc-answer-2" placeholder="Réponse 3">
-            <label><input type="checkbox" class="qc-correct-check qc-correct-2"> bonne réponse</label>
+            <label class="qc-checkbox-label"><input type="checkbox" class="qc-correct-check qc-correct-2"><span class="qc-checkbox-visual"></span> bonne réponse</label>
           </div>
           <div class="qc-answer-row">
             <input type="text" class="qc-answer qc-answer-3" placeholder="Réponse 4">
-            <label><input type="checkbox" class="qc-correct-check qc-correct-3"> bonne réponse</label>
+            <label class="qc-checkbox-label"><input type="checkbox" class="qc-correct-check qc-correct-3"><span class="qc-checkbox-visual"></span> bonne réponse</label>
           </div>
 
           <div style="display:flex; gap:14px; margin-top:14px;">

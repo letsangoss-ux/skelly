@@ -62,7 +62,10 @@ document.getElementById('btn-create').addEventListener('click', () => {
 
 // ---------- Musique de fond ----------
 const bgMusic = document.getElementById('bg-music');
+const musicControl = document.getElementById('music-control');
 const btnToggleMusic = document.getElementById('btn-toggle-music');
+const musicVolumeSlider = document.getElementById('music-volume');
+bgMusic.volume = musicVolumeSlider.value / 100;
 
 function playTrack(url) {
   if (!url) return;
@@ -74,7 +77,7 @@ function playTrack(url) {
   bgMusic.play().catch(() => {});
 }
 function playLobbyMusic() {
-  if (currentQuiz && currentQuiz.music) { playTrack(currentQuiz.music); btnToggleMusic.classList.remove('hidden'); }
+  if (currentQuiz && currentQuiz.music) { playTrack(currentQuiz.music); musicControl.classList.remove('hidden'); }
 }
 function playQuestionMusic() {
   if (currentQuiz && currentQuiz.musicQuestion) playTrack(currentQuiz.musicQuestion);
@@ -85,8 +88,17 @@ function stopMusic() { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic.removeA
 btnToggleMusic.addEventListener('click', () => {
   musicMuted = !musicMuted;
   bgMusic.muted = musicMuted;
-  btnToggleMusic.textContent = musicMuted ? '🔇 Musique' : '🔊 Musique';
+  btnToggleMusic.textContent = musicMuted ? '🔇' : '🔊';
   if (!musicMuted && bgMusic.paused) bgMusic.play().catch(() => {});
+});
+
+musicVolumeSlider.addEventListener('input', () => {
+  bgMusic.volume = musicVolumeSlider.value / 100;
+  if (musicVolumeSlider.value > 0 && musicMuted) {
+    musicMuted = false;
+    bgMusic.muted = false;
+    btnToggleMusic.textContent = '🔊';
+  }
 });
 
 // ---------- Créer la partie ----------
@@ -100,7 +112,7 @@ socket.on('host:game-created', ({ code, quiz }) => {
   new QRCode(document.getElementById('qrcode'), { text: joinUrl, width: 200, height: 200, colorDark: '#16130F', colorLight: '#F8F3EA' });
 
   showScreen('lobby');
-  if (quiz.music || quiz.musicQuestion) btnToggleMusic.classList.remove('hidden');
+  if (quiz.music || quiz.musicQuestion) musicControl.classList.remove('hidden');
   playLobbyMusic();
 });
 
@@ -136,11 +148,22 @@ socket.on('question:show', (q) => {
   currentQuestionIndex = q.index;
   currentAnswersText = q.answers;
   document.getElementById('q-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
-  document.getElementById('q-image').src = q.image;
+  document.getElementById('q-text').textContent = q.text || '';
+  document.getElementById('q-text').classList.toggle('hidden', !q.text);
   document.getElementById('answered-count').textContent = '0';
   document.getElementById('total-players').textContent = document.getElementById('player-count-num').textContent;
-  document.getElementById('q-hint-banner').classList.add('hidden');
-  document.getElementById('btn-show-hint').style.display = q.hint ? 'inline-block' : 'none';
+  document.getElementById('q-multi-banner').classList.toggle('hidden', !q.multipleAnswers);
+
+  const photoFrame = document.getElementById('q-photo-frame');
+  const expandBtn = document.getElementById('btn-expand-photo');
+  if (q.image) {
+    document.getElementById('q-image').src = q.image;
+    photoFrame.classList.remove('hidden');
+    expandBtn.classList.remove('hidden');
+  } else {
+    photoFrame.classList.add('hidden');
+    expandBtn.classList.add('hidden');
+  }
 
   const wrap = document.getElementById('q-answers-host');
   wrap.innerHTML = '';
@@ -177,14 +200,6 @@ function startTimer(duration) {
     if (remaining <= 0) clearInterval(timerInterval);
   }, 1000);
 }
-
-// ---------- Indice ----------
-document.getElementById('btn-show-hint').addEventListener('click', () => socket.emit('host:show-hint'));
-socket.on('question:hint', ({ hint }) => {
-  const banner = document.getElementById('q-hint-banner');
-  banner.textContent = `💡 Indice : ${hint}`;
-  banner.classList.remove('hidden');
-});
 
 // ---------- Pause ----------
 document.getElementById('btn-toggle-pause').addEventListener('click', () => socket.emit('host:toggle-pause'));

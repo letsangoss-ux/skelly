@@ -23,7 +23,10 @@ const QUIZ_FILE = path.join(__dirname, 'data', 'quizzes.json');
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
 const HISTORY_FILE = path.join(__dirname, 'data', 'history.json');
 
-function loadQuizzes() { return JSON.parse(fs.readFileSync(QUIZ_FILE, 'utf-8')); }
+function loadQuizzes() {
+  if (!fs.existsSync(QUIZ_FILE)) fs.writeFileSync(QUIZ_FILE, '[]');
+  return JSON.parse(fs.readFileSync(QUIZ_FILE, 'utf-8'));
+}
 function saveQuizzes(quizzes) { fs.writeFileSync(QUIZ_FILE, JSON.stringify(quizzes, null, 2)); }
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')); }
 function loadHistory() { return fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8')) : []; }
@@ -228,10 +231,13 @@ io.on('connection', (socket) => {
         const q = game.quiz.questions[game.currentQuestion];
         const alreadyAnswered = !!(game.answers[game.currentQuestion] && game.answers[game.currentQuestion][socket.id]);
         if (q && !alreadyAnswered) {
+          const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
           socket.emit('question:show', {
             index: game.currentQuestion, total: game.quiz.questions.length,
-            image: q.image, answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
-            hint: q.hint || null,
+            text: q.text || null,
+            image: q.image || null,
+            answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
+            multipleAnswers: correctIndexes.length > 1,
           });
         }
       } else if (game.state === 'ended') {
@@ -297,13 +303,6 @@ io.on('connection', (socket) => {
     if (game) revealAnswer(game);
   });
 
-  socket.on('host:show-hint', () => {
-    const game = games[socket.data.code];
-    if (!game || game.currentQuestion < 0) return;
-    const q = game.quiz.questions[game.currentQuestion];
-    if (q && q.hint) io.to(game.code).emit('question:hint', { hint: q.hint });
-  });
-
   socket.on('host:toggle-pause', () => {
     const game = games[socket.data.code];
     if (!game || game.state !== 'playing') return;
@@ -363,10 +362,13 @@ function sendQuestion(game) {
   const q = game.quiz.questions[game.currentQuestion];
   if (!q) { console.error('Question introuvable, fin de partie forcée.'); endGame(game); return; }
   game.questionStartedAt = Date.now();
+  const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
   io.to(game.code).emit('question:show', {
     index: game.currentQuestion, total: game.quiz.questions.length,
-    image: q.image, answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
-    hint: q.hint || null,
+    text: q.text || null,
+    image: q.image || null,
+    answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
+    multipleAnswers: correctIndexes.length > 1,
   });
 }
 

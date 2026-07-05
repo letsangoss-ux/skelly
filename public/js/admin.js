@@ -210,17 +210,21 @@ function addQuestionCard(question) {
 
   const photoInput = card.querySelector('.qc-photo-input');
   const photoPreview = card.querySelector('.qc-photo-preview');
-  let photoUrl = question ? question.image : '';
-  if (photoUrl) { photoPreview.src = photoUrl; photoPreview.classList.remove('hidden'); }
+  const removePhotoBtn = card.querySelector('.qc-remove-photo');
+  let photoUrl = question ? question.image || '' : '';
+  if (photoUrl) { photoPreview.src = photoUrl; photoPreview.classList.remove('hidden'); removePhotoBtn.classList.remove('hidden'); }
   card.dataset.photoUrl = photoUrl;
 
-  card.querySelector('.qc-hint').value = question && question.hint ? question.hint : '';
+  card.querySelector('.qc-question-text').value = question && question.text ? question.text : '';
 
   const answers = question ? question.answers : ['', '', '', ''];
   const correctIndexes = question ? (question.correctIndexes && question.correctIndexes.length ? question.correctIndexes : [question.correctIndex || 0]) : [0];
   for (let i = 0; i < 4; i++) {
     card.querySelector(`.qc-answer-${i}`).value = answers[i] || '';
-    card.querySelector(`.qc-correct-${i}`).checked = correctIndexes.includes(i);
+    const checkbox = card.querySelector(`.qc-correct-${i}`);
+    checkbox.checked = correctIndexes.includes(i);
+    updateCheckboxVisual(checkbox);
+    checkbox.addEventListener('change', () => updateCheckboxVisual(checkbox));
   }
 
   card.querySelector('.qc-duration').value = question ? question.duration : 20;
@@ -238,7 +242,16 @@ function addQuestionCard(question) {
       card.dataset.photoUrl = photoUrl;
       photoPreview.src = photoUrl;
       photoPreview.classList.remove('hidden');
+      removePhotoBtn.classList.remove('hidden');
     }
+  });
+
+  removePhotoBtn.addEventListener('click', () => {
+    photoUrl = '';
+    card.dataset.photoUrl = '';
+    photoPreview.classList.add('hidden');
+    photoPreview.src = '';
+    removePhotoBtn.classList.add('hidden');
   });
 
   card.querySelector('.qc-remove').addEventListener('click', () => { card.remove(); renumberQuestions(); });
@@ -247,6 +260,12 @@ function addQuestionCard(question) {
 
   document.getElementById('questions-list').appendChild(card);
   renumberQuestions();
+}
+
+function updateCheckboxVisual(checkbox) {
+  const label = checkbox.closest('.qc-checkbox-label');
+  if (checkbox.checked) label.classList.add('checked');
+  else label.classList.remove('checked');
 }
 
 function moveCard(card, direction) {
@@ -277,14 +296,13 @@ async function saveQuiz() {
 
   const questions = [];
   for (const card of cards) {
-    const photoUrl = card.dataset.photoUrl;
+    const photoUrl = card.dataset.photoUrl || null;
+    const questionText = card.querySelector('.qc-question-text').value.trim();
     const answers = [0, 1, 2, 3].map((i) => card.querySelector(`.qc-answer-${i}`).value.trim());
     const correctFlags = [0, 1, 2, 3].map((i) => card.querySelector(`.qc-correct-${i}`).checked);
-    const hint = card.querySelector('.qc-hint').value.trim();
     const duration = parseInt(card.querySelector('.qc-duration').value, 10) || 20;
     const points = parseInt(card.querySelector('.qc-points').value, 10) || 1000;
 
-    if (!photoUrl) { errorEl.textContent = 'Chaque question doit avoir une photo.'; return; }
     if (answers.some((a) => !a)) { errorEl.textContent = 'Merci de remplir les 4 réponses de chaque question.'; return; }
     if (!correctFlags.some(Boolean)) { errorEl.textContent = 'Cochez au moins une bonne réponse par question.'; return; }
 
@@ -297,7 +315,7 @@ async function saveQuiz() {
     const shuffledAnswers = pairs.map((p) => p.text);
     const correctIndexes = pairs.map((p, i) => (p.correct ? i : -1)).filter((i) => i !== -1);
 
-    questions.push({ image: photoUrl, answers: shuffledAnswers, correctIndexes, hint: hint || null, duration, points });
+    questions.push({ image: photoUrl, text: questionText || null, answers: shuffledAnswers, correctIndexes, duration, points });
   }
 
   const payload = { title, questions, music: currentMusicUrl || null, musicQuestion: currentMusicQUrl || null };
