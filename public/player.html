@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Joueur — Le Quiz des Sacs</title>
+<title>La Team Skelly</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -12,14 +12,14 @@
   <div id="screen-join" class="screen">
     <div class="card">
       <div class="eyebrow" style="text-align:center;display:block;">Rejoindre la partie</div>
-      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
+      <h1 class="title-xl" style="text-align:center;">La Team Skelly</h1>
       <div class="field">
         <label for="input-code">Code de la partie</label>
         <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
       </div>
       <div class="field">
         <label for="input-pseudo">Ton pseudo</label>
-        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
+        <input type="text" id="input-pseudo" placeholder="..." maxlength="16" autocomplete="off">
       </div>
       <div class="field">
         <label>Choisis ton avatar</label>
@@ -61,9 +61,17 @@
           <div class="timer-num" id="p-timer-num">20</div>
         </div>
       </div>
+      <div id="p-hint-banner" class="hint-banner hidden"></div>
       <div class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
       <div class="answers-grid" id="p-answers"></div>
       <div class="waiting-msg hidden" id="p-waiting-msg">Réponse envoyée, patiente...</div>
+      <div class="reaction-bar" id="reaction-bar">
+        <button class="reaction-btn" data-emoji="😂">😂</button>
+        <button class="reaction-btn" data-emoji="😮">😮</button>
+        <button class="reaction-btn" data-emoji="🔥">🔥</button>
+        <button class="reaction-btn" data-emoji="😅">😅</button>
+        <button class="reaction-btn" data-emoji="👏">👏</button>
+      </div>
     </div>
   </div>
 
@@ -74,6 +82,7 @@
       <h2 id="result-text"></h2>
       <div class="points-earned" id="result-points"></div>
       <p class="subtitle">Score total : <strong id="result-total"></strong></p>
+      <div id="result-streak" class="streak-badge hidden"></div>
     </div>
   </div>
 
@@ -82,6 +91,7 @@
     <div class="podium-wrap">
       <div class="eyebrow">Partie terminée</div>
       <h1 class="title-xl" id="final-title"></h1>
+      <div class="awards-list" id="final-awards"></div>
       <div class="leaderboard" id="final-player-leaderboard" style="margin:24px auto 0;"></div>
     </div>
   </div>

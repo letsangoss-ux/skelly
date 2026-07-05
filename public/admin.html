@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tableau de bord — Le Quiz des Sacs</title>
+<title>La Team Skelly</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -17,9 +17,7 @@
         <label for="input-password">Mot de passe administrateur</label>
         <input type="text" id="input-password" placeholder="••••••••" autocomplete="off">
       </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btn-login">Se connecter</button>
-      </div>
+      <div class="btn-row"><button class="btn btn-primary" id="btn-login">Se connecter</button></div>
       <div class="error-msg" id="login-error"></div>
     </div>
   </div>
@@ -28,12 +26,10 @@
   <div id="screen-dashboard" class="screen hidden">
     <div class="admin-shell">
       <div class="admin-header">
-        <div>
-          <div class="eyebrow">Tableau de bord</div>
-          <h1 class="title-xl">Mes quiz</h1>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique des parties</button>
+        <div><div class="eyebrow">Tableau de bord</div><h1 class="title-xl">Mes quiz</h1></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-show-global" style="width:auto;">Classement général</button>
+          <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
@@ -45,13 +41,21 @@
   <div id="screen-history" class="screen hidden">
     <div class="admin-shell">
       <div class="admin-header">
-        <div>
-          <div class="eyebrow">Historique</div>
-          <h1 class="title-xl">Parties jouées</h1>
-        </div>
+        <div><div class="eyebrow">Historique</div><h1 class="title-xl">Parties jouées</h1></div>
         <button class="btn btn-ghost" id="btn-back-dashboard" style="width:auto;">← Retour</button>
       </div>
       <div id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : classement général -->
+  <div id="screen-global" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Toutes parties confondues</div><h1 class="title-xl">Classement général</h1></div>
+        <button class="btn btn-ghost" id="btn-back-dashboard-2" style="width:auto;">← Retour</button>
+      </div>
+      <div id="global-list"></div>
     </div>
   </div>
 
@@ -59,10 +63,7 @@
   <div id="screen-editor" class="screen hidden">
     <div class="admin-shell">
       <div class="admin-header">
-        <div>
-          <div class="eyebrow">Éditeur</div>
-          <h1 class="title-xl" id="editor-title">Nouveau quiz</h1>
-        </div>
+        <div><div class="eyebrow">Éditeur</div><h1 class="title-xl" id="editor-title">Nouveau quiz</h1></div>
         <button class="btn btn-ghost" id="btn-cancel-edit" style="width:auto;">← Annuler</button>
       </div>
 
@@ -72,14 +73,26 @@
       </div>
 
       <div class="field">
-        <label>Musique de fond (optionnel)</label>
+        <label>Musique de salle d'attente (optionnel)</label>
         <div id="music-current" class="hidden" style="margin-bottom:10px;">
           <audio id="music-preview" controls style="width:100%;"></audio>
-          <button class="icon-btn" id="btn-remove-music">✕ Retirer la musique</button>
+          <button class="icon-btn" id="btn-remove-music">✕ Retirer</button>
         </div>
         <label class="qc-upload-label" style="display:inline-block;width:auto;padding:10px 18px;">
           <input type="file" id="music-upload-input" accept="audio/*" class="hidden">
-          <span>Choisir un fichier audio (mp3, m4a...)</span>
+          <span>Choisir un fichier audio</span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label>Musique pendant les questions (optionnel, sinon la musique d'attente continue)</label>
+        <div id="music-q-current" class="hidden" style="margin-bottom:10px;">
+          <audio id="music-q-preview" controls style="width:100%;"></audio>
+          <button class="icon-btn" id="btn-remove-music-q">✕ Retirer</button>
+        </div>
+        <label class="qc-upload-label" style="display:inline-block;width:auto;padding:10px 18px;">
+          <input type="file" id="music-q-upload-input" accept="audio/*" class="hidden">
+          <span>Choisir un fichier audio</span>
         </label>
       </div>
 
@@ -94,12 +107,18 @@
     </div>
   </div>
 
-  <!-- Modèle (template) d'une carte question, dupliqué en JS -->
+  <!-- Modèle d'une carte question -->
   <template id="question-card-template">
     <div class="question-card">
       <div class="qc-header">
         <span class="qc-number"></span>
-        <button class="icon-btn qc-remove" title="Supprimer la question">✕</button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="qc-order-btns">
+            <button class="icon-btn qc-move-up" title="Monter">▲</button>
+            <button class="icon-btn qc-move-down" title="Descendre">▼</button>
+          </div>
+          <button class="icon-btn qc-remove" title="Supprimer la question">✕</button>
+        </div>
       </div>
       <div class="qc-body">
         <div class="qc-photo-zone">
@@ -110,31 +129,28 @@
           </label>
         </div>
         <div class="qc-fields">
-          <div class="field">
-            <label>Bonne réponse</label>
-            <input type="text" class="qc-correct" placeholder="Ex : Sac Chanel Classic Flap">
+          <div class="field"><label>Indice (optionnel)</label><input type="text" class="qc-hint" placeholder="Ex : C'est une maison française."></div>
+
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-0" placeholder="Réponse 1">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-0"> bonne réponse</label>
           </div>
-          <div class="field">
-            <label>Mauvaise réponse 1</label>
-            <input type="text" class="qc-wrong qc-wrong-0" placeholder="Ex : Sac Dior Lady">
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-1" placeholder="Réponse 2">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-1"> bonne réponse</label>
           </div>
-          <div class="field">
-            <label>Mauvaise réponse 2</label>
-            <input type="text" class="qc-wrong qc-wrong-1" placeholder="Ex : Sac Louis Vuitton Neverfull">
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-2" placeholder="Réponse 3">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-2"> bonne réponse</label>
           </div>
-          <div class="field">
-            <label>Mauvaise réponse 3</label>
-            <input type="text" class="qc-wrong qc-wrong-2" placeholder="Ex : Sac Hermès Kelly">
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-3" placeholder="Réponse 4">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-3"> bonne réponse</label>
           </div>
-          <div style="display:flex; gap:14px;">
-            <div class="field" style="flex:1;">
-              <label>Temps (secondes)</label>
-              <input type="text" class="qc-duration" placeholder="20">
-            </div>
-            <div class="field" style="flex:1;">
-              <label>Points</label>
-              <input type="text" class="qc-points" placeholder="1000">
-            </div>
+
+          <div style="display:flex; gap:14px; margin-top:14px;">
+            <div class="field" style="flex:1;"><label>Temps (secondes)</label><input type="text" class="qc-duration" placeholder="20"></div>
+            <div class="field" style="flex:1;"><label>Points</label><input type="text" class="qc-points" placeholder="1000"></div>
           </div>
         </div>
       </div>

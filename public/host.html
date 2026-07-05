@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Animateur — Le Quiz des Sacs</title>
+<title>La Team Skelly</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -18,9 +18,7 @@
       <div class="btn-row hidden" id="preset-create-row">
         <button class="btn btn-primary" id="btn-create">Créer la partie</button>
       </div>
-      <p class="subtitle" style="margin-top:24px;">
-        <a href="/admin.html" style="color:var(--gold);">Gérer mes quiz →</a>
-      </p>
+      <p class="subtitle" style="margin-top:24px;"><a href="/admin.html" style="color:var(--gold);">Gérer mes quiz →</a></p>
     </div>
   </div>
 
@@ -52,9 +50,12 @@
           <div class="timer-num" id="timer-num">20</div>
         </div>
       </div>
+      <div id="q-hint-banner" class="hint-banner hidden"></div>
       <div class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
-      <div style="text-align:center; margin-bottom:14px;">
-        <button class="btn-expand" id="btn-expand-photo">⛶ Afficher la photo en plein écran</button>
+      <div style="text-align:center; margin-bottom:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn-expand" id="btn-expand-photo">⛶ Plein écran</button>
+        <button class="btn-expand" id="btn-show-hint">💡 Afficher l'indice</button>
+        <button class="btn-expand" id="btn-toggle-pause">⏸ Pause</button>
       </div>
       <div class="answers-grid" id="q-answers-host"></div>
       <div class="waiting-msg"><span id="answered-count">0</span> / <span id="total-players">0</span> ont répondu</div>
@@ -84,7 +85,8 @@
       <div class="eyebrow">Fin de la partie</div>
       <h1 class="title-xl">Podium</h1>
       <div class="podium-stage" id="podium-stage"></div>
-      <div class="leaderboard" id="final-leaderboard" style="margin:0 auto;"></div>
+      <div class="awards-list" id="podium-awards"></div>
+      <div class="leaderboard" id="final-leaderboard" style="margin:20px auto 0;"></div>
       <div class="host-controls">
         <button class="btn btn-ghost" onclick="window.location.href='/host.html'">Nouvelle partie</button>
       </div>

@@ -8,6 +8,16 @@ let selectedAvatar = AVATAR_GALLERY[0];
 let myPseudo = '';
 let timerInterval = null;
 let answered = false;
+let audioCtx = null;
+
+// ---------- Identité persistante (pour se reconnecter après coupure) ----------
+let myPlayerId = localStorage.getItem('quizPlayerId');
+if (!myPlayerId) {
+  myPlayerId = Math.random().toString(16).slice(2) + Date.now().toString(16);
+  localStorage.setItem('quizPlayerId', myPlayerId);
+}
+let lastCode = localStorage.getItem('quizLastCode') || '';
+let lastPseudo = localStorage.getItem('quizLastPseudo') || '';
 
 const screens = {
   join: document.getElementById('screen-join'),
@@ -16,13 +26,27 @@ const screens = {
   result: document.getElementById('screen-result'),
   final: document.getElementById('screen-final'),
 };
-
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
   screens[name].classList.remove('hidden');
 }
 
-// ---------- Construire une galerie d'avatars réutilisable ----------
+// ---------- Petit bip généré (pour le tic-tac des 5 dernières secondes) ----------
+function beep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+  } catch (e) { /* ignore */ }
+}
+
+// ---------- Galerie d'avatars réutilisable ----------
 function buildAvatarGallery(container, currentSelection, onSelect, fileInput) {
   container.innerHTML = '';
   AVATAR_GALLERY.forEach((url) => {
@@ -36,7 +60,6 @@ function buildAvatarGallery(container, currentSelection, onSelect, fileInput) {
     });
     container.appendChild(tile);
   });
-
   const uploadTile = document.createElement('div');
   uploadTile.className = 'avatar-tile upload-tile';
   uploadTile.textContent = '📷 Ma photo';
@@ -66,11 +89,10 @@ function buildAvatarGallery(container, currentSelection, onSelect, fileInput) {
 
 buildAvatarGallery(document.getElementById('avatar-grid'), selectedAvatar, (url) => { selectedAvatar = url; }, document.getElementById('join-avatar-upload-input'));
 
-// Pré-remplir le code si on arrive via un QR code (?code=XXXXX)
 const params = new URLSearchParams(window.location.search);
-if (params.get('code')) {
-  document.getElementById('input-code').value = params.get('code').toUpperCase();
-}
+if (params.get('code')) document.getElementById('input-code').value = params.get('code').toUpperCase();
+else if (lastCode) document.getElementById('input-code').value = lastCode;
+if (lastPseudo) document.getElementById('input-pseudo').value = lastPseudo;
 
 // ---------- Rejoindre ----------
 document.getElementById('btn-join').addEventListener('click', join);
@@ -85,17 +107,36 @@ function join() {
     return;
   }
   myPseudo = pseudo;
-  socket.emit('player:join-game', { code, pseudo, avatar: selectedAvatar });
+  localStorage.setItem('quizLastCode', code.toUpperCase());
+  localStorage.setItem('quizLastPseudo', pseudo);
+  socket.emit('player:join-game', { code, pseudo, avatar: selectedAvatar, playerId: myPlayerId });
+}
+
+// Tentative de reconnexion automatique uniquement si une partie était en cours
+const wasInGame = localStorage.getItem('quizInGame') === '1';
+if (wasInGame && lastCode && lastPseudo && !params.get('code')) {
+  socket.emit('player:join-game', { code: lastCode, pseudo: lastPseudo, avatar: selectedAvatar, playerId: myPlayerId });
 }
 
 socket.on('player:join-error', ({ message }) => {
   document.getElementById('join-error').textContent = message;
+  localStorage.removeItem('quizInGame');
 });
 
 socket.on('player:joined', ({ pseudo, avatar }) => {
-  document.getElementById('wait-avatar').src = avatar;
+  localStorage.setItem('quizInGame', '1');
+  myPseudo = pseudo;
+  if (avatar) selectedAvatar = avatar;
+  document.getElementById('wait-avatar').src = avatar || selectedAvatar;
   document.getElementById('wait-pseudo').textContent = pseudo;
   showScreen('wait');
+});
+
+socket.on('player:kicked', () => {
+  localStorage.removeItem('quizLastCode');
+  localStorage.removeItem('quizInGame');
+  alert("L'animateur t'a retiré de la partie.");
+  window.location.href = '/player.html';
 });
 
 // ---------- Changer de photo pendant l'attente ----------
@@ -104,8 +145,7 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
   avatarPickerPanel.classList.toggle('hidden');
   if (!avatarPickerPanel.classList.contains('hidden')) {
     buildAvatarGallery(
-      document.getElementById('wait-avatar-grid'),
-      selectedAvatar,
+      document.getElementById('wait-avatar-grid'), selectedAvatar,
       (url) => {
         selectedAvatar = url;
         document.getElementById('wait-avatar').src = url;
@@ -117,19 +157,27 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
   }
 });
 
+// ---------- Réactions ----------
+document.querySelectorAll('.reaction-btn').forEach((btn) => {
+  btn.addEventListener('click', () => socket.emit('player:reaction', { emoji: btn.dataset.emoji }));
+});
+
 // ---------- Question ----------
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
+let paused = false;
 
 socket.on('question:show', (q) => {
   answered = false;
+  paused = false;
   showScreen('play');
   document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('p-waiting-msg').classList.add('hidden');
   document.getElementById('p-image').src = q.image;
+  document.getElementById('p-hint-banner').classList.add('hidden');
 
   const wrap = document.getElementById('p-answers');
   wrap.innerHTML = '';
-  document.getElementById('p-answers').classList.remove('hidden');
+  wrap.classList.remove('hidden');
   q.answers.forEach((text, i) => {
     const btn = document.createElement('button');
     btn.className = `answer-btn ${answerColors[i]}`;
@@ -141,60 +189,89 @@ socket.on('question:show', (q) => {
   startTimer(q.duration);
 });
 
+socket.on('question:hint', ({ hint }) => {
+  const banner = document.getElementById('p-hint-banner');
+  banner.textContent = `💡 Indice : ${hint}`;
+  banner.classList.remove('hidden');
+});
+
+socket.on('game:paused', () => { paused = true; clearInterval(timerInterval); });
+socket.on('game:resumed', () => { paused = false; resumeTimerVisual(); });
+
 function submitAnswer(index, wrap) {
-  if (answered) return;
+  if (answered || paused) return;
   answered = true;
   socket.emit('player:submit-answer', { answerIndex: index });
-  const buttons = wrap.querySelectorAll('.answer-btn');
-  buttons.forEach((b, i) => {
-    b.disabled = true;
-    if (i === index) b.classList.add('chosen');
-  });
+  wrap.querySelectorAll('.answer-btn').forEach((b, i) => { b.disabled = true; if (i === index) b.classList.add('chosen'); });
   document.getElementById('p-waiting-msg').classList.remove('hidden');
 }
 
+let currentRemaining = 0;
+let currentDuration = 20;
+
 function startTimer(duration) {
   clearInterval(timerInterval);
+  currentDuration = duration;
+  currentRemaining = duration;
+  const circle = document.getElementById('p-timer-circle');
+  circle.style.strokeDasharray = 2 * Math.PI * 27;
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+function resumeTimerVisual() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 1000);
+}
+function tick() {
+  if (paused) return;
   const circle = document.getElementById('p-timer-circle');
   const numEl = document.getElementById('p-timer-num');
-  const radius = 27;
-  const circumference = 2 * Math.PI * radius;
-  circle.style.strokeDasharray = circumference;
-
-  let remaining = duration;
-  numEl.textContent = remaining;
-  circle.style.strokeDashoffset = 0;
-
-  timerInterval = setInterval(() => {
-    remaining -= 1;
-    numEl.textContent = Math.max(remaining, 0);
-    const ratio = Math.max(remaining, 0) / duration;
-    circle.style.strokeDashoffset = circumference * (1 - ratio);
-    if (remaining <= 0) {
-      clearInterval(timerInterval);
-      if (!answered) {
-        document.querySelectorAll('#p-answers .answer-btn').forEach((b) => (b.disabled = true));
-      }
-    }
-  }, 1000);
+  const circumference = 2 * Math.PI * 27;
+  numEl.textContent = Math.max(currentRemaining, 0);
+  const ratio = Math.max(currentRemaining, 0) / currentDuration;
+  circle.style.strokeDashoffset = circumference * (1 - ratio);
+  if (currentRemaining <= 5 && currentRemaining > 0) beep();
+  if (currentRemaining <= 0) {
+    clearInterval(timerInterval);
+    if (!answered) document.querySelectorAll('#p-answers .answer-btn').forEach((b) => (b.disabled = true));
+    return;
+  }
+  currentRemaining -= 1;
 }
 
 // ---------- Résultat individuel ----------
-socket.on('player:result', ({ correct, points, totalScore }) => {
+socket.on('player:result', ({ correct, points, totalScore, streak }) => {
   clearInterval(timerInterval);
   showScreen('result');
   document.getElementById('result-emoji').textContent = correct ? '🎉' : '😬';
   document.getElementById('result-text').textContent = correct ? 'Bonne réponse !' : 'Raté cette fois...';
   document.getElementById('result-points').textContent = correct ? `+${points} points` : '+0 point';
   document.getElementById('result-total').textContent = `${totalScore} points`;
+  const streakEl = document.getElementById('result-streak');
+  if (correct && streak >= 2) {
+    streakEl.textContent = `🔥 ${streak} bonnes réponses d'affilée !`;
+    streakEl.classList.remove('hidden');
+  } else {
+    streakEl.classList.add('hidden');
+  }
 });
 
 // ---------- Fin de partie ----------
-socket.on('game:over', ({ leaderboard }) => {
+socket.on('game:over', ({ leaderboard, awards }) => {
   showScreen('final');
+  localStorage.removeItem('quizLastCode');
+  localStorage.removeItem('quizInGame');
   const myRank = leaderboard.findIndex((p) => p.pseudo === myPseudo);
-  const title = myRank === 0 ? '👑 Tu remportes la partie !' : myRank <= 2 ? '🏅 Sur le podium !' : 'Merci d\'avoir joué !';
+  const title = myRank === 0 ? '👑 Tu remportes la partie !' : myRank >= 0 && myRank <= 2 ? '🏅 Sur le podium !' : "Merci d'avoir joué !";
   document.getElementById('final-title').textContent = title;
+
+  const awardsEl = document.getElementById('final-awards');
+  awardsEl.innerHTML = '';
+  if (awards) {
+    if (awards.fastest) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">⚡</span><span class="award-text"><strong>${awards.fastest.pseudo}</strong> — le plus rapide</span></div>`;
+    if (awards.streak) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🔥</span><span class="award-text"><strong>${awards.streak.pseudo}</strong> — ${awards.streak.value} bonnes réponses d'affilée</span></div>`;
+    if (awards.comeback) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🚀</span><span class="award-text"><strong>${awards.comeback.pseudo}</strong> — plus grosse remontée au classement</span></div>`;
+  }
 
   const lb = document.getElementById('final-player-leaderboard');
   lb.innerHTML = '';
@@ -206,11 +283,7 @@ socket.on('game:over', ({ leaderboard }) => {
     lb.appendChild(row);
   });
 
-  if (myRank <= 2 && window.confetti) {
-    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-  }
+  if (myRank >= 0 && myRank <= 2 && window.confetti) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
 });
 
-socket.on('game:host-left', () => {
-  alert("L'animateur a quitté la partie.");
-});
+socket.on('game:host-left', () => alert("L'animateur a quitté la partie."));

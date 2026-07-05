@@ -631,3 +631,133 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 }
 .btn-expand:hover { background: var(--gold-soft); }
 
+/* ---------- HINT ---------- */
+.hint-banner {
+  background: rgba(198,166,100,0.12);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px 18px;
+  text-align: center;
+  color: var(--gold);
+  font-weight: 600;
+  margin-bottom: 16px;
+  animation: popIn 0.3s ease both;
+}
+
+/* ---------- PAUSE OVERLAY ---------- */
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,8,6,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  font-family: 'Fraunces', serif;
+  font-size: 2rem;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+/* ---------- KICK BUTTON ---------- */
+.player-pill { position: relative; padding-right: 30px; }
+.player-pill .kick-btn {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: rgba(227,156,156,0.7);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.player-pill .kick-btn:hover { color: #E39C9C; }
+
+/* ---------- REACTIONS ---------- */
+.reaction-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+.reaction-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(198,166,100,0.25);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.reaction-btn:active { transform: scale(0.85); }
+
+.floating-reaction {
+  position: fixed;
+  bottom: 10%;
+  font-size: 2.2rem;
+  z-index: 950;
+  animation: floatUp 2.6s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  15% { opacity: 1; transform: translateY(-40px) scale(1); }
+  100% { opacity: 0; transform: translateY(-320px) scale(1.1); }
+}
+
+/* ---------- STREAK ---------- */
+.streak-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #E3944A, #C6604A);
+  color: #16130F;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-top: 8px;
+}
+
+/* ---------- AWARDS ---------- */
+.awards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+  margin: 24px auto 0;
+}
+.award-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(198,166,100,0.2);
+  border-radius: 12px;
+  padding: 10px 16px;
+  text-align: left;
+}
+.award-emoji { font-size: 1.4rem; }
+.award-text { font-size: 0.9rem; color: var(--cream-dim); }
+.award-text strong { color: var(--cream); }
+
+/* ---------- ANSWER CHECKBOX (admin) ---------- */
+.qc-answer-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.qc-answer-row input[type=text] { flex: 1; }
+.qc-answer-row label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--cream-dim); white-space: nowrap; }
+
+.qc-order-btns { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- GLOBAL LEADERBOARD ---------- */
+.global-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(198,166,100,0.15);
+  padding: 12px 18px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+.global-lb-row .glb-wins { color: var(--gold); font-weight: 700; }
+.global-lb-row .glb-meta { color: var(--cream-dim); font-size: 0.8rem; }
+
