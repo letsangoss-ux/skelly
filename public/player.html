@@ -34,7 +34,7 @@
   </div>
 
   <!-- ÉCRAN 2 : salle d'attente -->
-  <div id="screen-wait" class="screen hidden">
+ <div id="screen-wait" class="screen hidden">
     <div class="card" style="text-align:center;">
       <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
       <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
@@ -48,7 +48,6 @@
     </div>
   </div>
 
-  <!-- ÉCRAN 3 : question -->
   <div id="screen-play" class="screen hidden">
     <div class="question-wrap">
       <div class="progress-row">
@@ -61,37 +60,31 @@
           <div class="timer-num" id="p-timer-num">20</div>
         </div>
       </div>
-      <div id="p-hint-banner" class="hint-banner hidden"></div>
-      <div class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
+
+      <h2 id="p-text" style="margin-bottom:14px; font-size:1.2rem; text-align:center;"></h2>
+      <div id="p-multi-answers-msg" class="tag-pill hidden" style="background:var(--gold); color:var(--ink); width:100%; text-align:center; box-sizing:border-box;">Attention : Plusieurs bonnes réponses possibles !</div>
+      
+      <div class="bag-photo-frame small-frame hidden" id="p-image-frame"><img id="p-image" src="" alt="Photo du sac"></div>
+      
       <div class="answers-grid" id="p-answers"></div>
+      <button id="btn-submit-answers" class="btn btn-primary hidden" style="margin-top:20px;">Valider ma réponse</button>
       <div class="waiting-msg hidden" id="p-waiting-msg">Réponse envoyée, patiente...</div>
-      <div class="reaction-bar" id="reaction-bar">
-        <button class="reaction-btn" data-emoji="😂">😂</button>
-        <button class="reaction-btn" data-emoji="😮">😮</button>
-        <button class="reaction-btn" data-emoji="🔥">🔥</button>
-        <button class="reaction-btn" data-emoji="😅">😅</button>
-        <button class="reaction-btn" data-emoji="👏">👏</button>
-      </div>
     </div>
   </div>
 
-  <!-- ÉCRAN 4 : résultat de la question -->
   <div id="screen-result" class="screen hidden">
     <div class="card" style="text-align:center;">
       <div class="result-badge" id="result-emoji"></div>
       <h2 id="result-text"></h2>
       <div class="points-earned" id="result-points"></div>
       <p class="subtitle">Score total : <strong id="result-total"></strong></p>
-      <div id="result-streak" class="streak-badge hidden"></div>
     </div>
   </div>
 
-  <!-- ÉCRAN 5 : podium final -->
   <div id="screen-final" class="screen hidden">
     <div class="podium-wrap">
       <div class="eyebrow">Partie terminée</div>
       <h1 class="title-xl" id="final-title"></h1>
-      <div class="awards-list" id="final-awards"></div>
       <div class="leaderboard" id="final-player-leaderboard" style="margin:24px auto 0;"></div>
     </div>
   </div>
