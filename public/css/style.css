@@ -791,6 +791,19 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 .qc-order-btns { display: flex; flex-direction: column; gap: 4px; }
 .qc-remove-photo { margin-top: 4px; font-size: 0.72rem; }
 
+.qc-type {
+  width: 100%;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(248,243,234,0.2);
+  color: var(--cream);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  padding: 12px 14px;
+  border-radius: 12px;
+  outline: none;
+}
+.qc-type:focus { border-color: var(--gold); }
+
 /* ---------- VOLUME SLIDER ---------- */
 .music-control {
   position: fixed;

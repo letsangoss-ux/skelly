@@ -23,6 +23,7 @@ const screens = {
   join: document.getElementById('screen-join'),
   wait: document.getElementById('screen-wait'),
   play: document.getElementById('screen-play'),
+  answered: document.getElementById('screen-answered'),
   result: document.getElementById('screen-result'),
   final: document.getElementById('screen-final'),
 };
@@ -171,7 +172,6 @@ socket.on('question:show', (q) => {
   paused = false;
   showScreen('play');
   document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
-  document.getElementById('p-waiting-msg').classList.add('hidden');
   document.getElementById('p-multi-banner').classList.toggle('hidden', !q.multipleAnswers);
 
   const questionTextEl = document.getElementById('p-question-text');
@@ -203,8 +203,8 @@ function submitAnswer(index, wrap) {
   if (answered || paused) return;
   answered = true;
   socket.emit('player:submit-answer', { answerIndex: index });
-  wrap.querySelectorAll('.answer-btn').forEach((b, i) => { b.disabled = true; if (i === index) b.classList.add('chosen'); });
-  document.getElementById('p-waiting-msg').classList.remove('hidden');
+  clearInterval(timerInterval);
+  showScreen('answered');
 }
 
 let currentRemaining = 0;

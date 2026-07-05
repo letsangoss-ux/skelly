@@ -215,6 +215,10 @@ function addQuestionCard(question) {
   if (photoUrl) { photoPreview.src = photoUrl; photoPreview.classList.remove('hidden'); removePhotoBtn.classList.remove('hidden'); }
   card.dataset.photoUrl = photoUrl;
 
+  const typeSelect = card.querySelector('.qc-type');
+  const questionType = question && question.type === 'truefalse' ? 'truefalse' : 'classic';
+  typeSelect.value = questionType;
+
   card.querySelector('.qc-question-text').value = question && question.text ? question.text : '';
 
   const answers = question ? question.answers : ['', '', '', ''];
@@ -224,8 +228,33 @@ function addQuestionCard(question) {
     const checkbox = card.querySelector(`.qc-correct-${i}`);
     checkbox.checked = correctIndexes.includes(i);
     updateCheckboxVisual(checkbox);
-    checkbox.addEventListener('change', () => updateCheckboxVisual(checkbox));
+    checkbox.addEventListener('change', () => {
+      // En mode "Vrai ou pas", une seule bonne réponse a de sens : on décoche l'autre automatiquement
+      if (typeSelect.value === 'truefalse' && checkbox.checked) {
+        [0, 1].forEach((j) => {
+          if (j !== i) {
+            const other = card.querySelector(`.qc-correct-${j}`);
+            other.checked = false;
+            updateCheckboxVisual(other);
+          }
+        });
+      }
+      updateCheckboxVisual(checkbox);
+    });
   }
+
+  function applyTypeVisibility() {
+    const isTrueFalse = typeSelect.value === 'truefalse';
+    card.querySelectorAll('.qc-answer-row-23').forEach((row) => row.classList.toggle('hidden', isTrueFalse));
+    const a0 = card.querySelector('.qc-answer-0');
+    const a1 = card.querySelector('.qc-answer-1');
+    a0.placeholder = isTrueFalse ? 'Ex : Vrai (ou Estelle, etc.)' : 'Réponse 1';
+    a1.placeholder = isTrueFalse ? 'Ex : Faux (ou Pas Estelle, etc.)' : 'Réponse 2';
+    card.querySelector('.qc-question-label').textContent = isTrueFalse ? 'Affirmation à juger' : 'Intitulé de la question';
+    card.querySelector('.qc-question-text').placeholder = isTrueFalse ? 'Ex : Estelle a acheté ce sac plus de 500€' : 'Ex : Quel est ce sac ?';
+  }
+  typeSelect.addEventListener('change', applyTypeVisibility);
+  applyTypeVisibility();
 
   card.querySelector('.qc-duration').value = question ? question.duration : 20;
   card.querySelector('.qc-points').value = question ? question.points : 1000;
@@ -297,14 +326,26 @@ async function saveQuiz() {
   const questions = [];
   for (const card of cards) {
     const photoUrl = card.dataset.photoUrl || null;
+    const questionType = card.querySelector('.qc-type').value === 'truefalse' ? 'truefalse' : 'classic';
     const questionText = card.querySelector('.qc-question-text').value.trim();
-    const answers = [0, 1, 2, 3].map((i) => card.querySelector(`.qc-answer-${i}`).value.trim());
-    const correctFlags = [0, 1, 2, 3].map((i) => card.querySelector(`.qc-correct-${i}`).checked);
+    const indexes = questionType === 'truefalse' ? [0, 1] : [0, 1, 2, 3];
+
+    const answers = indexes.map((i) => card.querySelector(`.qc-answer-${i}`).value.trim());
+    const correctFlags = indexes.map((i) => card.querySelector(`.qc-correct-${i}`).checked);
     const duration = parseInt(card.querySelector('.qc-duration').value, 10) || 20;
     const points = parseInt(card.querySelector('.qc-points').value, 10) || 1000;
 
-    if (answers.some((a) => !a)) { errorEl.textContent = 'Merci de remplir les 4 réponses de chaque question.'; return; }
+    if (answers.some((a) => !a)) {
+      errorEl.textContent = questionType === 'truefalse'
+        ? 'Merci de remplir les 2 réponses de la question "Vrai ou pas".'
+        : 'Merci de remplir les 4 réponses de chaque question.';
+      return;
+    }
     if (!correctFlags.some(Boolean)) { errorEl.textContent = 'Cochez au moins une bonne réponse par question.'; return; }
+    if (questionType === 'truefalse' && correctFlags.filter(Boolean).length > 1) {
+      errorEl.textContent = 'Une question "Vrai ou pas" ne peut avoir qu\'une seule bonne réponse.';
+      return;
+    }
 
     // On mélange l'ordre des réponses pour que la bonne ne soit pas toujours au même endroit
     const pairs = answers.map((text, i) => ({ text, correct: correctFlags[i] }));
@@ -315,7 +356,7 @@ async function saveQuiz() {
     const shuffledAnswers = pairs.map((p) => p.text);
     const correctIndexes = pairs.map((p, i) => (p.correct ? i : -1)).filter((i) => i !== -1);
 
-    questions.push({ image: photoUrl, text: questionText || null, answers: shuffledAnswers, correctIndexes, duration, points });
+    questions.push({ type: questionType, image: photoUrl, text: questionText || null, answers: shuffledAnswers, correctIndexes, duration, points });
   }
 
   const payload = { title, questions, music: currentMusicUrl || null, musicQuestion: currentMusicQUrl || null };
