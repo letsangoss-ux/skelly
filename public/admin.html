@@ -26,13 +26,17 @@
   <div id="screen-dashboard" class="screen hidden">
     <div class="admin-shell">
       <div class="admin-header">
-        <div><div class="eyebrow">Tableau de bord</div><h1 class="title-xl">Mes quiz</h1></div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div><div class="eyebrow">Tableau de bord</div><h1 class="title-xl">Mes quiz</h1></div>        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-export" style="width:auto;">⬇ Exporter mes quiz</button>
+          <button class="btn btn-ghost" id="btn-import" style="width:auto;">⬆ Importer</button>
+          <input type="file" id="import-file-input" accept="application/json,.json" class="hidden">
           <button class="btn btn-ghost" id="btn-show-global" style="width:auto;">Classement général</button>
           <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
+      <div class="info-banner" style="text-align:left;">💾 Pensez à cliquer sur « Exporter mes quiz » régulièrement et à garder le fichier de côté : sur un hébergement gratuit, le serveur peut redémarrer et effacer vos quiz. L'import restaure tout (textes, photos, musiques) en un clic.</div>
+      <p class="subtitle" id="import-export-msg"></p>
       <div id="quiz-list" class="quiz-list"></div>
     </div>
   </div>

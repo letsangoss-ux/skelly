@@ -97,6 +97,49 @@ async function duplicateQuiz(id) {
 
 document.getElementById('btn-new-quiz').addEventListener('click', () => openEditor(null));
 
+// ---------- Export ----------
+document.getElementById('btn-export').addEventListener('click', async () => {
+  const msgEl = document.getElementById('import-export-msg');
+  msgEl.textContent = 'Préparation du fichier...';
+  try {
+    const res = await api('/api/admin/export');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `quiz-berdah-export-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msgEl.textContent = '✅ Export téléchargé. Gardez ce fichier de côté (email, drive, clé USB...).';
+  } catch (e) {
+    msgEl.textContent = "❌ Erreur lors de l'export.";
+  }
+});
+
+// ---------- Import ----------
+document.getElementById('btn-import').addEventListener('click', () => document.getElementById('import-file-input').click());
+document.getElementById('import-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const msgEl = document.getElementById('import-export-msg');
+  msgEl.textContent = 'Import en cours...';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await api('/api/admin/import', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) { msgEl.textContent = `❌ ${data.error || "Échec de l'import."}`; return; }
+    msgEl.textContent = `✅ Import terminé : ${data.added} quiz ajouté(s), ${data.updated} mis à jour, ${data.filesRestored} fichier(s) (photos/musiques) restauré(s).`;
+    loadDashboard();
+  } catch (err) {
+    msgEl.textContent = "❌ Erreur lors de l'import.";
+  }
+  e.target.value = '';
+});
+
 // ---------- Historique ----------
 document.getElementById('btn-show-history').addEventListener('click', async () => {
   const res = await api('/api/admin/history');

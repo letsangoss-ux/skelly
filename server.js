@@ -32,6 +32,14 @@ function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'))
 function loadHistory() { return fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8')) : []; }
 function saveHistory(history) { fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2)); }
 
+// Convertit une URL publique ("/uploads/xxx.jpg" ou "/audio/xxx.mp3") en chemin réel sur le disque
+function urlToDiskPath(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('/uploads/')) return path.join(__dirname, 'data', 'images', url.slice('/uploads/'.length));
+  if (url.startsWith('/audio/')) return path.join(__dirname, 'data', 'audio', url.slice('/audio/'.length));
+  return null;
+}
+
 app.get('/api/quizzes', (req, res) => res.json(loadQuizzes()));
 
 // ------------------------------------------------------------
@@ -137,6 +145,78 @@ app.get('/api/admin/global-leaderboard', requireAdmin, (req, res) => {
   });
   const ranking = Object.values(stats).sort((a, b) => b.wins - a.wins || b.totalPoints - a.totalPoints);
   res.json(ranking);
+});
+
+// ------------------------------------------------------------
+// EXPORT / IMPORT — sauvegarde manuelle des quiz (texte + photos + musiques)
+// Utile car l'hébergement gratuit peut effacer le disque à chaque redémarrage.
+// ------------------------------------------------------------
+app.get('/api/admin/export', requireAdmin, (req, res) => {
+  const quizzes = loadQuizzes();
+  const files = {};
+
+  function collectFile(urlPath) {
+    if (!urlPath || files[urlPath]) return;
+    const diskPath = urlToDiskPath(urlPath);
+    if (diskPath && fs.existsSync(diskPath)) {
+      files[urlPath] = fs.readFileSync(diskPath).toString('base64');
+    }
+  }
+
+  quizzes.forEach((quiz) => {
+    collectFile(quiz.music);
+    collectFile(quiz.musicQuestion);
+    (quiz.questions || []).forEach((q) => collectFile(q.image));
+  });
+
+  const exportData = { exportedAt: new Date().toISOString(), quizzes, files };
+  res.setHeader('Content-Disposition', 'attachment; filename="quiz-berdah-export.json"');
+  res.setHeader('Content-Type', 'application/json');
+  res.send(JSON.stringify(exportData));
+});
+
+const importUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 80 * 1024 * 1024 } });
+
+app.post('/api/admin/import', requireAdmin, (req, res) => {
+  importUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: 'Fichier trop volumineux ou invalide.' });
+    if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu.' });
+
+    let data;
+    try {
+      data = JSON.parse(req.file.buffer.toString('utf-8'));
+    } catch (e) {
+      return res.status(400).json({ error: "Ce fichier n'est pas un export valide (JSON illisible)." });
+    }
+    if (!data || !Array.isArray(data.quizzes)) {
+      return res.status(400).json({ error: "Format d'export non reconnu." });
+    }
+
+    // Restaurer les fichiers (photos, musiques) exactement à leur emplacement d'origine
+    const files = data.files || {};
+    let filesRestored = 0;
+    Object.entries(files).forEach(([urlPath, base64]) => {
+      const diskPath = urlToDiskPath(urlPath);
+      if (!diskPath) return;
+      try {
+        fs.mkdirSync(path.dirname(diskPath), { recursive: true });
+        fs.writeFileSync(diskPath, Buffer.from(base64, 'base64'));
+        filesRestored++;
+      } catch (e) { console.error('Impossible de restaurer', urlPath, e); }
+    });
+
+    // Fusionner les quiz : on remplace ceux qui ont le même id, on ajoute les autres
+    const existing = loadQuizzes();
+    let added = 0, updated = 0;
+    data.quizzes.forEach((importedQuiz) => {
+      const idx = existing.findIndex((q) => q.id === importedQuiz.id);
+      if (idx === -1) { existing.push(importedQuiz); added++; }
+      else { existing[idx] = importedQuiz; updated++; }
+    });
+    saveQuizzes(existing);
+
+    res.json({ ok: true, added, updated, filesRestored });
+  });
 });
 
 // Upload de photo de profil par un joueur (pas besoin d'être admin)
