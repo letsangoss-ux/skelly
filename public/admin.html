@@ -1,290 +1,162 @@
-const socket = io();
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Team Skelly</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
 
-const AVATAR_GALLERY = [
-  '/avatars/avatar1.svg', '/avatars/avatar2.svg', '/avatars/avatar3.svg', '/avatars/avatar4.svg', '/avatars/avatar5.svg',
-  '/avatars/avatar6.svg', '/avatars/avatar7.svg', '/avatars/avatar8.svg', '/avatars/avatar9.svg', '/avatars/avatar10.svg',
-];
-let selectedAvatar = AVATAR_GALLERY[0];
-let myPseudo = '';
-let timerInterval = null;
-let answered = false;
-let audioCtx = null;
+  <!-- ÉCRAN : connexion -->
+  <div id="screen-login" class="screen">
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">Accès réservé</div>
+      <h1 class="title-xl">Tableau de bord</h1>
+      <div class="field" style="text-align:left;">
+        <label for="input-password">Mot de passe administrateur</label>
+        <input type="text" id="input-password" placeholder="••••••••" autocomplete="off">
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" id="btn-login">Se connecter</button></div>
+      <div class="error-msg" id="login-error"></div>
+    </div>
+  </div>
 
-// ---------- Identité persistante (pour se reconnecter après coupure) ----------
-let myPlayerId = localStorage.getItem('quizPlayerId');
-if (!myPlayerId) {
-  myPlayerId = Math.random().toString(16).slice(2) + Date.now().toString(16);
-  localStorage.setItem('quizPlayerId', myPlayerId);
-}
-let lastCode = localStorage.getItem('quizLastCode') || '';
-let lastPseudo = localStorage.getItem('quizLastPseudo') || '';
+  <!-- ÉCRAN : liste des quiz -->
+  <div id="screen-dashboard" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Tableau de bord</div><h1 class="title-xl">Mes quiz</h1></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-show-global" style="width:auto;">Classement général</button>
+          <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
+          <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
+        </div>
+      </div>
+      <div id="quiz-list" class="quiz-list"></div>
+    </div>
+  </div>
 
-const screens = {
-  join: document.getElementById('screen-join'),
-  wait: document.getElementById('screen-wait'),
-  play: document.getElementById('screen-play'),
-  result: document.getElementById('screen-result'),
-  final: document.getElementById('screen-final'),
-};
-function showScreen(name) {
-  Object.values(screens).forEach((s) => s.classList.add('hidden'));
-  screens[name].classList.remove('hidden');
-}
+  <!-- ÉCRAN : historique -->
+  <div id="screen-history" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Historique</div><h1 class="title-xl">Parties jouées</h1></div>
+        <button class="btn btn-ghost" id="btn-back-dashboard" style="width:auto;">← Retour</button>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </div>
 
-// ---------- Petit bip généré (pour le tic-tac des 5 dernières secondes) ----------
-function beep() {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.15);
-  } catch (e) { /* ignore */ }
-}
+  <!-- ÉCRAN : classement général -->
+  <div id="screen-global" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Toutes parties confondues</div><h1 class="title-xl">Classement général</h1></div>
+        <button class="btn btn-ghost" id="btn-back-dashboard-2" style="width:auto;">← Retour</button>
+      </div>
+      <div id="global-list"></div>
+    </div>
+  </div>
 
-// ---------- Galerie d'avatars réutilisable ----------
-function buildAvatarGallery(container, currentSelection, onSelect, fileInput) {
-  container.innerHTML = '';
-  AVATAR_GALLERY.forEach((url) => {
-    const tile = document.createElement('div');
-    tile.className = 'avatar-tile' + (url === currentSelection ? ' selected' : '');
-    tile.innerHTML = `<img src="${url}" alt="Avatar">`;
-    tile.addEventListener('click', () => {
-      container.querySelectorAll('.avatar-tile').forEach((t) => t.classList.remove('selected'));
-      tile.classList.add('selected');
-      onSelect(url);
-    });
-    container.appendChild(tile);
-  });
-  const uploadTile = document.createElement('div');
-  uploadTile.className = 'avatar-tile upload-tile';
-  uploadTile.textContent = '📷 Ma photo';
-  uploadTile.addEventListener('click', () => fileInput.click());
-  container.appendChild(uploadTile);
+  <!-- ÉCRAN : éditeur de quiz -->
+  <div id="screen-editor" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Éditeur</div><h1 class="title-xl" id="editor-title">Nouveau quiz</h1></div>
+        <button class="btn btn-ghost" id="btn-cancel-edit" style="width:auto;">← Annuler</button>
+      </div>
 
-  fileInput.value = '';
-  fileInput.onchange = async () => {
-    const file = fileInput.files[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('photo', file);
-    try {
-      const res = await fetch('/api/avatar-upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.url) {
-        onSelect(data.url);
-        container.querySelectorAll('.avatar-tile').forEach((t) => t.classList.remove('selected'));
-        const customTile = document.createElement('div');
-        customTile.className = 'avatar-tile selected';
-        customTile.innerHTML = `<img src="${data.url}" alt="Ma photo">`;
-        container.insertBefore(customTile, uploadTile);
-      }
-    } catch (e) { /* ignore */ }
-  };
-}
+      <div class="field">
+        <label for="quiz-title-input">Titre du quiz</label>
+        <input type="text" id="quiz-title-input" placeholder="Ex : Spécial sacs — Live du 12 juillet">
+      </div>
 
-buildAvatarGallery(document.getElementById('avatar-grid'), selectedAvatar, (url) => { selectedAvatar = url; }, document.getElementById('join-avatar-upload-input'));
+      <div class="field">
+        <label>Musique de salle d'attente (optionnel)</label>
+        <div id="music-current" class="hidden" style="margin-bottom:10px;">
+          <audio id="music-preview" controls style="width:100%;"></audio>
+          <button class="icon-btn" id="btn-remove-music">✕ Retirer</button>
+        </div>
+        <label class="qc-upload-label" style="display:inline-block;width:auto;padding:10px 18px;">
+          <input type="file" id="music-upload-input" accept="audio/*" class="hidden">
+          <span>Choisir un fichier audio</span>
+        </label>
+      </div>
 
-const params = new URLSearchParams(window.location.search);
-if (params.get('code')) document.getElementById('input-code').value = params.get('code').toUpperCase();
-else if (lastCode) document.getElementById('input-code').value = lastCode;
-if (lastPseudo) document.getElementById('input-pseudo').value = lastPseudo;
+      <div class="field">
+        <label>Musique pendant les questions (optionnel, sinon la musique d'attente continue)</label>
+        <div id="music-q-current" class="hidden" style="margin-bottom:10px;">
+          <audio id="music-q-preview" controls style="width:100%;"></audio>
+          <button class="icon-btn" id="btn-remove-music-q">✕ Retirer</button>
+        </div>
+        <label class="qc-upload-label" style="display:inline-block;width:auto;padding:10px 18px;">
+          <input type="file" id="music-q-upload-input" accept="audio/*" class="hidden">
+          <span>Choisir un fichier audio</span>
+        </label>
+      </div>
 
-// ---------- Rejoindre ----------
-document.getElementById('btn-join').addEventListener('click', join);
-document.getElementById('input-pseudo').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+      <h3 style="margin-top:30px;">Questions</h3>
+      <div id="questions-list"></div>
+      <button class="btn btn-ghost" id="btn-add-question" style="margin-top:14px;">+ Ajouter une question</button>
 
-function join() {
-  const code = document.getElementById('input-code').value.trim();
-  const pseudo = document.getElementById('input-pseudo').value.trim();
-  document.getElementById('join-error').textContent = '';
-  if (!code || !pseudo) {
-    document.getElementById('join-error').textContent = 'Merci de remplir le code et ton pseudo.';
-    return;
-  }
-  myPseudo = pseudo;
-  localStorage.setItem('quizLastCode', code.toUpperCase());
-  localStorage.setItem('quizLastPseudo', pseudo);
-  socket.emit('player:join-game', { code, pseudo, avatar: selectedAvatar, playerId: myPlayerId });
-}
+      <div class="host-controls" style="justify-content:flex-start; margin-top:36px;">
+        <button class="btn btn-primary" id="btn-save-quiz" style="width:auto;">Enregistrer le quiz</button>
+      </div>
+      <div class="error-msg" id="editor-error"></div>
+    </div>
+  </div>
 
-// Tentative de reconnexion automatique uniquement si une partie était en cours
-const wasInGame = localStorage.getItem('quizInGame') === '1';
-if (wasInGame && lastCode && lastPseudo && !params.get('code')) {
-  socket.emit('player:join-game', { code: lastCode, pseudo: lastPseudo, avatar: selectedAvatar, playerId: myPlayerId });
-}
+  <!-- Modèle d'une carte question -->
+  <template id="question-card-template">
+    <div class="question-card">
+      <div class="qc-header">
+        <span class="qc-number"></span>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="qc-order-btns">
+            <button class="icon-btn qc-move-up" title="Monter">▲</button>
+            <button class="icon-btn qc-move-down" title="Descendre">▼</button>
+          </div>
+          <button class="icon-btn qc-remove" title="Supprimer la question">✕</button>
+        </div>
+      </div>
+      <div class="qc-body">
+        <div class="qc-photo-zone">
+          <img class="qc-photo-preview hidden">
+          <label class="qc-upload-label">
+            <input type="file" accept="image/*" class="qc-photo-input hidden">
+            <span>Choisir une photo</span>
+          </label>
+        </div>
+        <div class="qc-fields">
+          <div class="field"><label>Indice (optionnel)</label><input type="text" class="qc-hint" placeholder="Ex : C'est une maison française."></div>
 
-socket.on('player:join-error', ({ message }) => {
-  document.getElementById('join-error').textContent = message;
-  localStorage.removeItem('quizInGame');
-});
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-0" placeholder="Réponse 1">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-0"> bonne réponse</label>
+          </div>
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-1" placeholder="Réponse 2">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-1"> bonne réponse</label>
+          </div>
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-2" placeholder="Réponse 3">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-2"> bonne réponse</label>
+          </div>
+          <div class="qc-answer-row">
+            <input type="text" class="qc-answer qc-answer-3" placeholder="Réponse 4">
+            <label><input type="checkbox" class="qc-correct-check qc-correct-3"> bonne réponse</label>
+          </div>
 
-socket.on('player:joined', ({ pseudo, avatar }) => {
-  localStorage.setItem('quizInGame', '1');
-  myPseudo = pseudo;
-  if (avatar) selectedAvatar = avatar;
-  document.getElementById('wait-avatar').src = avatar || selectedAvatar;
-  document.getElementById('wait-pseudo').textContent = pseudo;
-  showScreen('wait');
-});
+          <div style="display:flex; gap:14px; margin-top:14px;">
+            <div class="field" style="flex:1;"><label>Temps (secondes)</label><input type="text" class="qc-duration" placeholder="20"></div>
+            <div class="field" style="flex:1;"><label>Points</label><input type="text" class="qc-points" placeholder="1000"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
 
-socket.on('player:kicked', () => {
-  localStorage.removeItem('quizLastCode');
-  localStorage.removeItem('quizInGame');
-  alert("L'animateur t'a retiré de la partie.");
-  window.location.href = '/player.html';
-});
-
-// ---------- Changer de photo pendant l'attente ----------
-const avatarPickerPanel = document.getElementById('avatar-picker-panel');
-document.getElementById('btn-change-avatar').addEventListener('click', () => {
-  avatarPickerPanel.classList.toggle('hidden');
-  if (!avatarPickerPanel.classList.contains('hidden')) {
-    buildAvatarGallery(
-      document.getElementById('wait-avatar-grid'), selectedAvatar,
-      (url) => {
-        selectedAvatar = url;
-        document.getElementById('wait-avatar').src = url;
-        socket.emit('player:update-avatar', { avatar: url });
-        avatarPickerPanel.classList.add('hidden');
-      },
-      document.getElementById('wait-avatar-upload-input')
-    );
-  }
-});
-
-// ---------- Réactions ----------
-document.querySelectorAll('.reaction-btn').forEach((btn) => {
-  btn.addEventListener('click', () => socket.emit('player:reaction', { emoji: btn.dataset.emoji }));
-});
-
-// ---------- Question ----------
-const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
-let paused = false;
-
-socket.on('question:show', (q) => {
-  answered = false;
-  paused = false;
-  showScreen('play');
-  document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
-  document.getElementById('p-waiting-msg').classList.add('hidden');
-  document.getElementById('p-multi-banner').classList.toggle('hidden', !q.multipleAnswers);
-
-  const questionTextEl = document.getElementById('p-question-text');
-  questionTextEl.textContent = q.text || '';
-  questionTextEl.classList.toggle('hidden', !q.text);
-
-  const photoFrame = document.getElementById('p-photo-frame');
-  if (q.image) { document.getElementById('p-image').src = q.image; photoFrame.classList.remove('hidden'); }
-  else photoFrame.classList.add('hidden');
-
-  const wrap = document.getElementById('p-answers');
-  wrap.innerHTML = '';
-  wrap.classList.remove('hidden');
-  q.answers.forEach((text, i) => {
-    const btn = document.createElement('button');
-    btn.className = `answer-btn ${answerColors[i]}`;
-    btn.innerHTML = `<span class="answer-shape"></span> ${text}`;
-    btn.addEventListener('click', () => submitAnswer(i, wrap));
-    wrap.appendChild(btn);
-  });
-
-  startTimer(q.duration);
-});
-
-socket.on('game:paused', () => { paused = true; clearInterval(timerInterval); });
-socket.on('game:resumed', () => { paused = false; resumeTimerVisual(); });
-
-function submitAnswer(index, wrap) {
-  if (answered || paused) return;
-  answered = true;
-  socket.emit('player:submit-answer', { answerIndex: index });
-  wrap.querySelectorAll('.answer-btn').forEach((b, i) => { b.disabled = true; if (i === index) b.classList.add('chosen'); });
-  document.getElementById('p-waiting-msg').classList.remove('hidden');
-}
-
-let currentRemaining = 0;
-let currentDuration = 20;
-
-function startTimer(duration) {
-  clearInterval(timerInterval);
-  currentDuration = duration;
-  currentRemaining = duration;
-  const circle = document.getElementById('p-timer-circle');
-  circle.style.strokeDasharray = 2 * Math.PI * 27;
-  tick();
-  timerInterval = setInterval(tick, 1000);
-}
-function resumeTimerVisual() {
-  clearInterval(timerInterval);
-  timerInterval = setInterval(tick, 1000);
-}
-function tick() {
-  if (paused) return;
-  const circle = document.getElementById('p-timer-circle');
-  const numEl = document.getElementById('p-timer-num');
-  const circumference = 2 * Math.PI * 27;
-  numEl.textContent = Math.max(currentRemaining, 0);
-  const ratio = Math.max(currentRemaining, 0) / currentDuration;
-  circle.style.strokeDashoffset = circumference * (1 - ratio);
-  if (currentRemaining <= 5 && currentRemaining > 0) beep();
-  if (currentRemaining <= 0) {
-    clearInterval(timerInterval);
-    if (!answered) document.querySelectorAll('#p-answers .answer-btn').forEach((b) => (b.disabled = true));
-    return;
-  }
-  currentRemaining -= 1;
-}
-
-// ---------- Résultat individuel ----------
-socket.on('player:result', ({ correct, points, totalScore, streak }) => {
-  clearInterval(timerInterval);
-  showScreen('result');
-  document.getElementById('result-emoji').textContent = correct ? '🎉' : '😬';
-  document.getElementById('result-text').textContent = correct ? 'Bonne réponse !' : 'Raté cette fois...';
-  document.getElementById('result-points').textContent = correct ? `+${points} points` : '+0 point';
-  document.getElementById('result-total').textContent = `${totalScore} points`;
-  const streakEl = document.getElementById('result-streak');
-  if (correct && streak >= 2) {
-    streakEl.textContent = `🔥 ${streak} bonnes réponses d'affilée !`;
-    streakEl.classList.remove('hidden');
-  } else {
-    streakEl.classList.add('hidden');
-  }
-});
-
-// ---------- Fin de partie ----------
-socket.on('game:over', ({ leaderboard, awards }) => {
-  showScreen('final');
-  localStorage.removeItem('quizLastCode');
-  localStorage.removeItem('quizInGame');
-  const myRank = leaderboard.findIndex((p) => p.pseudo === myPseudo);
-  const title = myRank === 0 ? '👑 Tu remportes la partie !' : myRank >= 0 && myRank <= 2 ? '🏅 Sur le podium !' : "Merci d'avoir joué !";
-  document.getElementById('final-title').textContent = title;
-
-  const awardsEl = document.getElementById('final-awards');
-  awardsEl.innerHTML = '';
-  if (awards) {
-    if (awards.fastest) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">⚡</span><span class="award-text"><strong>${awards.fastest.pseudo}</strong> — le plus rapide</span></div>`;
-    if (awards.streak) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🔥</span><span class="award-text"><strong>${awards.streak.pseudo}</strong> — ${awards.streak.value} bonnes réponses d'affilée</span></div>`;
-    if (awards.comeback) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🚀</span><span class="award-text"><strong>${awards.comeback.pseudo}</strong> — plus grosse remontée au classement</span></div>`;
-  }
-
-  const lb = document.getElementById('final-player-leaderboard');
-  lb.innerHTML = '';
-  leaderboard.forEach((p, i) => {
-    const row = document.createElement('div');
-    row.className = 'leaderboard-row';
-    row.style.animationDelay = `${i * 0.05}s`;
-    row.innerHTML = `<span class="lb-rank">${i + 1}</span><img class="avatar-img-sm" src="${p.avatar}"><span class="lb-name">${p.pseudo}</span><span class="lb-score">${p.score} pts</span>`;
-    lb.appendChild(row);
-  });
-
-  if (myRank >= 0 && myRank <= 2 && window.confetti) confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-});
-
-socket.on('game:host-left', () => alert("L'animateur a quitté la partie."));
+  <script src="/js/admin.js"></script>
+</body>
+</html>

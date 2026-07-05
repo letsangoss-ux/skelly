@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "id": "demo-sacs-1",
+    "title": "Spécial Sacs — Lives Enchères",
+    "music": null,
+    "musicQuestion": null,
+    "questions": [
+      {
+        "image": "/uploads/bag1.svg",
+        "answers": ["Sac Chanel Classic Flap", "Sac Dior Lady", "Sac Louis Vuitton Neverfull", "Sac Hermès Kelly"],
+        "correctIndexes": [0],
+        "hint": "C'est une maison française fondée par Coco.",
+        "duration": 20,
+        "points": 1000
+      },
+      {
+        "image": "/uploads/bag2.svg",
+        "answers": ["Sac Céline Triomphe", "Sac Chanel Boy", "Sac Prada Galleria", "Sac Balenciaga City"],
+        "correctIndexes": [2],
+        "hint": "La maison est italienne.",
+        "duration": 20,
+        "points": 1000
+      },
+      {
+        "image": "/uploads/bag3.svg",
+        "answers": ["Sac Fendi Baguette", "Sac Gucci Marmont", "Sac YSL Loulou", "Sac Bottega Veneta Jodie"],
+        "correctIndexes": [1],
+        "hint": "Le logo est composé de deux lettres entrelacées.",
+        "duration": 15,
+        "points": 1200
+      },
+      {
+        "image": "/uploads/bag4.svg",
+        "answers": ["Sac Hermès Birkin", "Sac Louis Vuitton Speedy", "Sac Coach Tabby", "Sac Longchamp Pliage"],
+        "correctIndexes": [0],
+        "hint": "Ce modèle porte le nom d'une actrice et chanteuse.",
+        "duration": 20,
+        "points": 1500
+      },
+      {
+        "image": "/uploads/bag5.svg",
+        "answers": ["Sac Jacquemus Chiquito", "Sac Miu Miu Wander", "Sac Loewe Puzzle", "Sac Staud Shirley"],
+        "correctIndexes": [3],
+        "hint": "La marque porte un prénom féminin.",
+        "duration": 15,
+        "points": 1000
+      }
+    ]
+  }
+]
