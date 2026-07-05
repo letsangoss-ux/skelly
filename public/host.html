@@ -3,12 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>La Team Skelly</title>
+<title>Animateur — Le Quiz des Sacs</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-  <!-- ÉCRAN 1 : créer la partie -->
   <div id="screen-create" class="screen">
     <div class="card" style="text-align:center;">
       <div class="eyebrow">Espace animateur</div>
@@ -18,11 +17,12 @@
       <div class="btn-row hidden" id="preset-create-row">
         <button class="btn btn-primary" id="btn-create">Créer la partie</button>
       </div>
-      <p class="subtitle" style="margin-top:24px;"><a href="/admin.html" style="color:var(--gold);">Gérer mes quiz →</a></p>
+      <p class="subtitle" style="margin-top:24px;">
+        <a href="/admin.html" style="color:var(--gold);">Gérer mes quiz →</a>
+      </p>
     </div>
   </div>
 
-  <!-- ÉCRAN 2 : salle d'attente -->
   <div id="screen-lobby" class="screen hidden">
     <div class="lobby-wrap">
       <div class="eyebrow">Code de la partie</div>
@@ -37,7 +37,6 @@
     </div>
   </div>
 
-  <!-- ÉCRAN 3 : question en cours -->
   <div id="screen-question" class="screen hidden">
     <div class="question-wrap">
       <div class="progress-row">
@@ -50,13 +49,16 @@
           <div class="timer-num" id="timer-num">20</div>
         </div>
       </div>
-      <div id="q-hint-banner" class="hint-banner hidden"></div>
-      <div class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
-      <div style="text-align:center; margin-bottom:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-        <button class="btn-expand" id="btn-expand-photo">⛶ Plein écran</button>
-        <button class="btn-expand" id="btn-show-hint">💡 Afficher l'indice</button>
-        <button class="btn-expand" id="btn-toggle-pause">⏸ Pause</button>
+      
+      <h2 id="q-text" style="margin-bottom:14px; text-align:center;"></h2>
+      
+      <div class="bag-photo-frame hidden" id="q-image-frame">
+        <img id="q-image" src="" alt="Photo du sac">
       </div>
+      <div style="text-align:center; margin-bottom:14px;">
+        <button class="btn-expand hidden" id="btn-expand-photo">⛶ Afficher la photo en plein écran</button>
+      </div>
+      
       <div class="answers-grid" id="q-answers-host"></div>
       <div class="waiting-msg"><span id="answered-count">0</span> / <span id="total-players">0</span> ont répondu</div>
       <div class="host-controls">
@@ -65,7 +67,6 @@
     </div>
   </div>
 
-  <!-- ÉCRAN 4 : révélation + classement -->
   <div id="screen-reveal" class="screen hidden">
     <div class="question-wrap" style="text-align:center;">
       <span class="tag-pill">Réponse révélée</span>
@@ -79,14 +80,12 @@
     </div>
   </div>
 
-  <!-- ÉCRAN 5 : podium final -->
   <div id="screen-podium" class="screen hidden">
     <div class="podium-wrap">
       <div class="eyebrow">Fin de la partie</div>
       <h1 class="title-xl">Podium</h1>
       <div class="podium-stage" id="podium-stage"></div>
-      <div class="awards-list" id="podium-awards"></div>
-      <div class="leaderboard" id="final-leaderboard" style="margin:20px auto 0;"></div>
+      <div class="leaderboard" id="final-leaderboard" style="margin:0 auto;"></div>
       <div class="host-controls">
         <button class="btn btn-ghost" onclick="window.location.href='/host.html'">Nouvelle partie</button>
       </div>
@@ -94,7 +93,11 @@
   </div>
 
   <audio id="bg-music" loop></audio>
-  <button class="change-avatar-btn hidden" id="btn-toggle-music" style="position:fixed; top:16px; right:16px; z-index:50;">🔊 Musique</button>
+  
+  <div style="position:fixed; top:16px; right:16px; z-index:50; display:flex; align-items:center; gap:10px;">
+    <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.4" class="hidden" style="width: 80px; accent-color: var(--gold);">
+    <button class="change-avatar-btn hidden" id="btn-toggle-music" style="margin-top:0;">🔊 Musique</button>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
