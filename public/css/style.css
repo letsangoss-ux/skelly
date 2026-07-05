@@ -23,6 +23,11 @@ html, body {
   color: var(--cream);
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation; /* évite le double-tap-to-zoom accidentel sur Safari iOS */
+}
+
+button, .reaction-btn, .answer-btn, .avatar-tile, .avatar-choice, .btn, a {
+  touch-action: manipulation;
 }
 
 @media (prefers-reduced-motion: reduce) {

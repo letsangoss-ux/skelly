@@ -200,6 +200,8 @@ io.on('connection', (socket) => {
       pauseStartedAt: null,
       answers: {},
       previousRanks: {},
+      questionRevealed: false,
+      autoRevealTimer: null,
     };
     socket.join(code);
     socket.data.role = 'host';
@@ -309,12 +311,18 @@ io.on('connection', (socket) => {
     if (!game.paused) {
       game.paused = true;
       game.pauseStartedAt = Date.now();
+      clearTimeout(game.autoRevealTimer);
+      if (game.autoRevealScheduledAt) {
+        const elapsed = Date.now() - game.autoRevealScheduledAt;
+        game.autoRevealRemainingMs = Math.max(0, (game.autoRevealRemainingMs || 0) - elapsed);
+      }
       io.to(game.code).emit('game:paused');
     } else {
       const pausedDuration = Date.now() - game.pauseStartedAt;
       game.questionStartedAt += pausedDuration;
       game.paused = false;
       game.pauseStartedAt = null;
+      scheduleAutoReveal(game, game.autoRevealRemainingMs || 0);
       io.to(game.code).emit('game:resumed');
     }
   });
@@ -352,16 +360,32 @@ io.on('connection', (socket) => {
       // On ne supprime pas tout de suite : le joueur peut se reconnecter (perte wifi, page rechargée)
       io.to(game.hostSocketId).emit('host:player-joined', { players: playersForHost(game) });
     } else if (socket.data.role === 'host') {
+      clearTimeout(game.autoRevealTimer);
       io.to(code).emit('game:host-left');
       delete games[code];
     }
   });
 });
 
+function scheduleAutoReveal(game, remainingMs) {
+  clearTimeout(game.autoRevealTimer);
+  game.autoRevealRemainingMs = remainingMs;
+  game.autoRevealScheduledAt = Date.now();
+  const questionAtSchedule = game.currentQuestion;
+  game.autoRevealTimer = setTimeout(() => {
+    // On vérifie qu'on est toujours sur la même question avant de révéler automatiquement
+    if (game.currentQuestion === questionAtSchedule && game.state === 'playing' && !game.paused) {
+      revealAnswer(game);
+    }
+  }, remainingMs + 400); // petite marge pour laisser le temps aux dernières réponses d'arriver
+}
+
 function sendQuestion(game) {
   const q = game.quiz.questions[game.currentQuestion];
   if (!q) { console.error('Question introuvable, fin de partie forcée.'); endGame(game); return; }
   game.questionStartedAt = Date.now();
+  game.questionRevealed = false;
+  const durationMs = (q.duration || 20) * 1000;
   const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
   io.to(game.code).emit('question:show', {
     index: game.currentQuestion, total: game.quiz.questions.length,
@@ -370,9 +394,14 @@ function sendQuestion(game) {
     answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
     multipleAnswers: correctIndexes.length > 1,
   });
+  scheduleAutoReveal(game, durationMs);
 }
 
 function revealAnswer(game) {
+  if (game.questionRevealed) return; // déjà révélée (manuellement ou automatiquement) — on ne le refait pas
+  game.questionRevealed = true;
+  clearTimeout(game.autoRevealTimer);
+
   const qIndex = game.currentQuestion;
   const q = game.quiz.questions[qIndex];
   const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
@@ -432,6 +461,7 @@ function revealAnswer(game) {
 }
 
 function endGame(game) {
+  clearTimeout(game.autoRevealTimer);
   game.state = 'ended';
   const players = Object.values(game.players);
   const leaderboard = players.sort((a, b) => b.score - a.score)
