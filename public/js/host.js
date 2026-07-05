@@ -5,8 +5,6 @@ let gameCode = null;
 let timerInterval = null;
 let currentQuestionIndex = 0;
 let musicMuted = false;
-let isPaused = false;
-let currentPlayersMap = {}; // socketId -> player (pour le bouton "exclure")
 
 const urlParams = new URLSearchParams(window.location.search);
 const presetQuizId = urlParams.get('quizId');
@@ -18,13 +16,16 @@ const screens = {
   reveal: document.getElementById('screen-reveal'),
   podium: document.getElementById('screen-podium'),
 };
+
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
   screens[name].classList.remove('hidden');
 }
-function avatarImg(p, cls) { return `<img class="${cls}" src="${p.avatar}" alt="${p.pseudo}">`; }
 
-// ---------- Écran 1 : choisir / créer la partie ----------
+function avatarImg(p, cls) {
+  return `<img class="${cls}" src="${p.avatar}" alt="${p.pseudo}">`;
+}
+
 async function initCreateScreen() {
   if (presetQuizId) {
     document.getElementById('quiz-select-list').classList.add('hidden');
@@ -34,7 +35,7 @@ async function initCreateScreen() {
       const quizzes = await res.json();
       const quiz = quizzes.find((q) => q.id === presetQuizId);
       if (quiz) document.getElementById('create-subtitle').textContent = `Quiz choisi : « ${quiz.title} »`;
-    } catch (e) {}
+    } catch (e) { }
     return;
   }
   try {
@@ -42,7 +43,10 @@ async function initCreateScreen() {
     const quizzes = await res.json();
     const list = document.getElementById('quiz-select-list');
     list.innerHTML = '';
-    if (quizzes.length === 0) { list.innerHTML = '<p class="subtitle">Aucun quiz. Créez-en un depuis « Gérer mes quiz ».</p>'; return; }
+    if (quizzes.length === 0) {
+      list.innerHTML = '<p class="subtitle">Aucun quiz pour le moment. Créez-en un depuis « Gérer mes quiz ».</p>';
+      return;
+    }
     quizzes.forEach((q) => {
       const btn = document.createElement('button');
       btn.className = 'btn btn-ghost';
@@ -60,27 +64,23 @@ document.getElementById('btn-create').addEventListener('click', () => {
   socket.emit('host:create-game', { quizId: presetQuizId });
 });
 
-// ---------- Musique de fond ----------
 const bgMusic = document.getElementById('bg-music');
 const btnToggleMusic = document.getElementById('btn-toggle-music');
+const volumeSlider = document.getElementById('music-volume');
 
-function playTrack(url) {
-  if (!url) return;
-  if (bgMusic.getAttribute('data-current') !== url) {
-    bgMusic.src = url;
-    bgMusic.setAttribute('data-current', url);
+function playMusicIfAny() {
+  if (currentQuiz && currentQuiz.music) {
+    bgMusic.src = currentQuiz.music;
+    bgMusic.volume = volumeSlider.value;
+    bgMusic.muted = musicMuted;
+    bgMusic.play().catch(() => {});
+    btnToggleMusic.classList.remove('hidden');
+    volumeSlider.classList.remove('hidden');
+  } else {
+    btnToggleMusic.classList.add('hidden');
+    volumeSlider.classList.add('hidden');
   }
-  bgMusic.muted = musicMuted;
-  bgMusic.play().catch(() => {});
 }
-function playLobbyMusic() {
-  if (currentQuiz && currentQuiz.music) { playTrack(currentQuiz.music); btnToggleMusic.classList.remove('hidden'); }
-}
-function playQuestionMusic() {
-  if (currentQuiz && currentQuiz.musicQuestion) playTrack(currentQuiz.musicQuestion);
-  else if (currentQuiz && currentQuiz.music) playTrack(currentQuiz.music);
-}
-function stopMusic() { bgMusic.pause(); bgMusic.currentTime = 0; bgMusic.removeAttribute('data-current'); }
 
 btnToggleMusic.addEventListener('click', () => {
   musicMuted = !musicMuted;
@@ -89,7 +89,15 @@ btnToggleMusic.addEventListener('click', () => {
   if (!musicMuted && bgMusic.paused) bgMusic.play().catch(() => {});
 });
 
-// ---------- Créer la partie ----------
+volumeSlider.addEventListener('input', (e) => {
+  bgMusic.volume = e.target.value;
+});
+
+function stopMusic() {
+  bgMusic.pause();
+  bgMusic.currentTime = 0;
+}
+
 socket.on('host:game-created', ({ code, quiz }) => {
   gameCode = code;
   currentQuiz = quiz;
@@ -97,50 +105,57 @@ socket.on('host:game-created', ({ code, quiz }) => {
 
   const joinUrl = `${window.location.origin}/player.html?code=${code}`;
   document.getElementById('qrcode').innerHTML = '';
-  new QRCode(document.getElementById('qrcode'), { text: joinUrl, width: 200, height: 200, colorDark: '#16130F', colorLight: '#F8F3EA' });
+  new QRCode(document.getElementById('qrcode'), {
+    text: joinUrl,
+    width: 200,
+    height: 200,
+    colorDark: '#16130F',
+    colorLight: '#F8F3EA',
+  });
 
   showScreen('lobby');
-  if (quiz.music || quiz.musicQuestion) btnToggleMusic.classList.remove('hidden');
-  playLobbyMusic();
+  playMusicIfAny();
 });
 
-// ---------- Joueurs qui rejoignent ----------
 socket.on('host:player-joined', ({ players }) => {
   document.getElementById('player-count-num').textContent = players.length;
-  currentPlayersMap = {};
   const pills = document.getElementById('player-pills');
   pills.innerHTML = '';
   players.forEach((p) => {
-    if (p.socketId) currentPlayersMap[p.socketId] = p;
     const el = document.createElement('div');
     el.className = 'player-pill';
-    el.innerHTML = `${avatarImg(p, 'avatar-img-sm')} ${p.pseudo} <button class="kick-btn" title="Exclure">✕</button>`;
-    el.querySelector('.kick-btn').addEventListener('click', () => {
-      if (confirm(`Exclure ${p.pseudo} de la partie ?`)) socket.emit('host:kick-player', { socketId: p.socketId });
-    });
+    el.innerHTML = `${avatarImg(p, 'avatar-img-sm')} ${p.pseudo}`;
     pills.appendChild(el);
   });
 });
 
-// ---------- Lancer la partie ----------
-document.getElementById('btn-start').addEventListener('click', () => socket.emit('host:start-game'));
+document.getElementById('btn-start').addEventListener('click', () => {
+  socket.emit('host:start-game');
+});
 
-// ---------- Afficher une question ----------
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
 let currentAnswersText = [];
 
 socket.on('question:show', (q) => {
   showScreen('question');
-  isPaused = false;
-  document.getElementById('btn-toggle-pause').textContent = '⏸ Pause';
   currentQuestionIndex = q.index;
   currentAnswersText = q.answers;
   document.getElementById('q-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
-  document.getElementById('q-image').src = q.image;
   document.getElementById('answered-count').textContent = '0';
   document.getElementById('total-players').textContent = document.getElementById('player-count-num').textContent;
-  document.getElementById('q-hint-banner').classList.add('hidden');
-  document.getElementById('btn-show-hint').style.display = q.hint ? 'inline-block' : 'none';
+  
+  document.getElementById('q-text').textContent = q.text || '';
+  
+  const imgFrame = document.getElementById('q-image-frame');
+  const btnExpand = document.getElementById('btn-expand-photo');
+  if (q.image) {
+    document.getElementById('q-image').src = q.image;
+    imgFrame.classList.remove('hidden');
+    btnExpand.classList.remove('hidden');
+  } else {
+    imgFrame.classList.add('hidden');
+    btnExpand.classList.add('hidden');
+  }
 
   const wrap = document.getElementById('q-answers-host');
   wrap.innerHTML = '';
@@ -151,7 +166,6 @@ socket.on('question:show', (q) => {
     wrap.appendChild(btn);
   });
 
-  playQuestionMusic();
   startTimer(q.duration);
 });
 
@@ -164,77 +178,45 @@ function startTimer(duration) {
   clearInterval(timerInterval);
   const circle = document.getElementById('timer-circle');
   const numEl = document.getElementById('timer-num');
-  const circumference = 2 * Math.PI * 27;
+  const radius = 27;
+  const circumference = 2 * Math.PI * radius;
   circle.style.strokeDasharray = circumference;
+
   let remaining = duration;
   numEl.textContent = remaining;
   circle.style.strokeDashoffset = 0;
+
   timerInterval = setInterval(() => {
-    if (isPaused) return;
     remaining -= 1;
     numEl.textContent = Math.max(remaining, 0);
-    circle.style.strokeDashoffset = circumference * (1 - Math.max(remaining, 0) / duration);
+    const ratio = Math.max(remaining, 0) / duration;
+    circle.style.strokeDashoffset = circumference * (1 - ratio);
     if (remaining <= 0) clearInterval(timerInterval);
   }, 1000);
 }
 
-// ---------- Indice ----------
-document.getElementById('btn-show-hint').addEventListener('click', () => socket.emit('host:show-hint'));
-socket.on('question:hint', ({ hint }) => {
-  const banner = document.getElementById('q-hint-banner');
-  banner.textContent = `💡 Indice : ${hint}`;
-  banner.classList.remove('hidden');
-});
-
-// ---------- Pause ----------
-document.getElementById('btn-toggle-pause').addEventListener('click', () => socket.emit('host:toggle-pause'));
-socket.on('game:paused', () => {
-  isPaused = true;
-  document.getElementById('btn-toggle-pause').textContent = '▶ Reprendre';
-  if (!document.getElementById('pause-overlay-el')) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pause-overlay';
-    overlay.id = 'pause-overlay-el';
-    overlay.textContent = '⏸ Partie en pause';
-    document.body.appendChild(overlay);
-  }
-});
-socket.on('game:resumed', () => {
-  isPaused = false;
-  document.getElementById('btn-toggle-pause').textContent = '⏸ Pause';
-  const overlay = document.getElementById('pause-overlay-el');
-  if (overlay) overlay.remove();
-});
-
-// ---------- Réactions flottantes ----------
-socket.on('host:reaction', ({ emoji }) => {
-  const el = document.createElement('div');
-  el.className = 'floating-reaction';
-  el.textContent = emoji;
-  el.style.left = `${10 + Math.random() * 80}%`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2700);
-});
-
-// ---------- Photo en plein écran ----------
 document.getElementById('btn-expand-photo').addEventListener('click', () => {
   const overlay = document.createElement('div');
   overlay.className = 'fullscreen-photo-overlay';
   overlay.innerHTML = `<img src="${document.getElementById('q-image').src}" alt="Photo en grand">`;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.appendChild(overlay);
-  const escHandler = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); } };
+  const escHandler = (e) => {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+  };
   document.addEventListener('keydown', escHandler);
 });
 
-// ---------- Révéler ----------
-document.getElementById('btn-reveal').addEventListener('click', () => socket.emit('host:reveal'));
+document.getElementById('btn-reveal').addEventListener('click', () => {
+  socket.emit('host:reveal');
+});
 
 function rankChangeHtml(p) {
   if (p.isNew || !p.rankChange) return '<span class="lb-rank-change same">—</span>';
   if (p.rankChange > 0) return `<span class="lb-rank-change up">▲ ${p.rankChange}</span>`;
   return `<span class="lb-rank-change down">▼ ${Math.abs(p.rankChange)}</span>`;
 }
+
 function renderLeaderboard(container, leaderboard, withRankChange) {
   container.innerHTML = '';
   leaderboard.forEach((p, i) => {
@@ -273,22 +255,24 @@ socket.on('question:reveal', ({ correctIndexes, stats, leaderboard }) => {
     bars.appendChild(row);
   });
 
-  const correctTexts = correctIndexes.map((i) => currentAnswersText[i]).join(' ou ');
-  document.getElementById('reveal-answer-text').textContent = `Bonne réponse : ${correctTexts}`;
+  const correctTexts = correctIndexes.map(i => currentAnswersText[i]).join(' et ');
+  document.getElementById('reveal-answer-text').textContent = `Bonne(s) réponse(s) : ${correctTexts}`;
+  
   renderLeaderboard(document.getElementById('reveal-leaderboard'), leaderboard, true);
 });
 
-// ---------- Question suivante ----------
-document.getElementById('btn-next').addEventListener('click', () => socket.emit('host:next-question'));
+document.getElementById('btn-next').addEventListener('click', () => {
+  socket.emit('host:next-question');
+});
 
-// ---------- Fin de partie ----------
-socket.on('game:over', ({ leaderboard, awards }) => {
+socket.on('game:over', ({ leaderboard }) => {
   showScreen('podium');
   stopMusic();
   const top3 = leaderboard.slice(0, 3);
   const stage = document.getElementById('podium-stage');
   stage.innerHTML = '';
-  const order = [1, 0, 2];
+
+  const order = [1, 0, 2]; 
   order.forEach((idx) => {
     const p = top3[idx];
     if (!p) return;
@@ -296,17 +280,13 @@ socket.on('game:over', ({ leaderboard, awards }) => {
     const posClass = idx === 0 ? 'p1' : idx === 1 ? 'p2' : 'p3';
     const col = document.createElement('div');
     col.className = `podium-col ${posClass}`;
-    col.innerHTML = `${avatarImg(p, 'avatar-img-podium')}<div>${p.pseudo}</div><div class="podium-block ${heightClass}">${idx + 1}</div>`;
+    col.innerHTML = `
+      ${avatarImg(p, 'avatar-img-podium')}
+      <div>${p.pseudo}</div>
+      <div class="podium-block ${heightClass}">${idx + 1}</div>
+    `;
     stage.appendChild(col);
   });
-
-  const awardsEl = document.getElementById('podium-awards');
-  awardsEl.innerHTML = '';
-  if (awards) {
-    if (awards.fastest) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">⚡</span><span class="award-text"><strong>${awards.fastest.pseudo}</strong> — le plus rapide</span></div>`;
-    if (awards.streak) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🔥</span><span class="award-text"><strong>${awards.streak.pseudo}</strong> — ${awards.streak.value} bonnes réponses d'affilée</span></div>`;
-    if (awards.comeback) awardsEl.innerHTML += `<div class="award-row"><span class="award-emoji">🚀</span><span class="award-text"><strong>${awards.comeback.pseudo}</strong> — plus grosse remontée au classement</span></div>`;
-  }
 
   renderLeaderboard(document.getElementById('final-leaderboard'), leaderboard, false);
 
