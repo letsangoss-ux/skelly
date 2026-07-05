@@ -71,6 +71,18 @@
         <input type="text" id="quiz-title-input" placeholder="Ex : Spécial sacs — Live du 12 juillet">
       </div>
 
+      <div class="field">
+        <label>Musique de fond (optionnel)</label>
+        <div id="music-current" class="hidden" style="margin-bottom:10px;">
+          <audio id="music-preview" controls style="width:100%;"></audio>
+          <button class="icon-btn" id="btn-remove-music">✕ Retirer la musique</button>
+        </div>
+        <label class="qc-upload-label" style="display:inline-block;width:auto;padding:10px 18px;">
+          <input type="file" id="music-upload-input" accept="audio/*" class="hidden">
+          <span>Choisir un fichier audio (mp3, m4a...)</span>
+        </label>
+      </div>
+
       <h3 style="margin-top:30px;">Questions</h3>
       <div id="questions-list"></div>
       <button class="btn btn-ghost" id="btn-add-question" style="margin-top:14px;">+ Ajouter une question</button>

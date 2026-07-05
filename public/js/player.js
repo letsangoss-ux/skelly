@@ -1,7 +1,10 @@
 const socket = io();
 
-const AVATARS = ['👛', '👜', '🛍️', '💎', '👑', '✨', '🦋', '🌸', '🔥', '💅'];
-let selectedAvatar = AVATARS[0];
+const AVATAR_GALLERY = [
+  '/avatars/avatar1.svg', '/avatars/avatar2.svg', '/avatars/avatar3.svg', '/avatars/avatar4.svg', '/avatars/avatar5.svg',
+  '/avatars/avatar6.svg', '/avatars/avatar7.svg', '/avatars/avatar8.svg', '/avatars/avatar9.svg', '/avatars/avatar10.svg',
+];
+let selectedAvatar = AVATAR_GALLERY[0];
 let myPseudo = '';
 let timerInterval = null;
 let answered = false;
@@ -19,19 +22,49 @@ function showScreen(name) {
   screens[name].classList.remove('hidden');
 }
 
-// ---------- Avatars ----------
-const avatarGrid = document.getElementById('avatar-grid');
-AVATARS.forEach((a, i) => {
-  const el = document.createElement('div');
-  el.className = 'avatar-choice' + (i === 0 ? ' selected' : '');
-  el.textContent = a;
-  el.addEventListener('click', () => {
-    document.querySelectorAll('.avatar-choice').forEach((c) => c.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedAvatar = a;
+// ---------- Construire une galerie d'avatars réutilisable ----------
+function buildAvatarGallery(container, currentSelection, onSelect, fileInput) {
+  container.innerHTML = '';
+  AVATAR_GALLERY.forEach((url) => {
+    const tile = document.createElement('div');
+    tile.className = 'avatar-tile' + (url === currentSelection ? ' selected' : '');
+    tile.innerHTML = `<img src="${url}" alt="Avatar">`;
+    tile.addEventListener('click', () => {
+      container.querySelectorAll('.avatar-tile').forEach((t) => t.classList.remove('selected'));
+      tile.classList.add('selected');
+      onSelect(url);
+    });
+    container.appendChild(tile);
   });
-  avatarGrid.appendChild(el);
-});
+
+  const uploadTile = document.createElement('div');
+  uploadTile.className = 'avatar-tile upload-tile';
+  uploadTile.textContent = '📷 Ma photo';
+  uploadTile.addEventListener('click', () => fileInput.click());
+  container.appendChild(uploadTile);
+
+  fileInput.value = '';
+  fileInput.onchange = async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('photo', file);
+    try {
+      const res = await fetch('/api/avatar-upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.url) {
+        onSelect(data.url);
+        container.querySelectorAll('.avatar-tile').forEach((t) => t.classList.remove('selected'));
+        const customTile = document.createElement('div');
+        customTile.className = 'avatar-tile selected';
+        customTile.innerHTML = `<img src="${data.url}" alt="Ma photo">`;
+        container.insertBefore(customTile, uploadTile);
+      }
+    } catch (e) { /* ignore */ }
+  };
+}
+
+buildAvatarGallery(document.getElementById('avatar-grid'), selectedAvatar, (url) => { selectedAvatar = url; }, document.getElementById('join-avatar-upload-input'));
 
 // Pré-remplir le code si on arrive via un QR code (?code=XXXXX)
 const params = new URLSearchParams(window.location.search);
@@ -60,9 +93,28 @@ socket.on('player:join-error', ({ message }) => {
 });
 
 socket.on('player:joined', ({ pseudo, avatar }) => {
-  document.getElementById('wait-avatar').textContent = avatar;
+  document.getElementById('wait-avatar').src = avatar;
   document.getElementById('wait-pseudo').textContent = pseudo;
   showScreen('wait');
+});
+
+// ---------- Changer de photo pendant l'attente ----------
+const avatarPickerPanel = document.getElementById('avatar-picker-panel');
+document.getElementById('btn-change-avatar').addEventListener('click', () => {
+  avatarPickerPanel.classList.toggle('hidden');
+  if (!avatarPickerPanel.classList.contains('hidden')) {
+    buildAvatarGallery(
+      document.getElementById('wait-avatar-grid'),
+      selectedAvatar,
+      (url) => {
+        selectedAvatar = url;
+        document.getElementById('wait-avatar').src = url;
+        socket.emit('player:update-avatar', { avatar: url });
+        avatarPickerPanel.classList.add('hidden');
+      },
+      document.getElementById('wait-avatar-upload-input')
+    );
+  }
 });
 
 // ---------- Question ----------
@@ -73,6 +125,7 @@ socket.on('question:show', (q) => {
   showScreen('play');
   document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('p-waiting-msg').classList.add('hidden');
+  document.getElementById('p-image').src = q.image;
 
   const wrap = document.getElementById('p-answers');
   wrap.innerHTML = '';
@@ -149,7 +202,7 @@ socket.on('game:over', ({ leaderboard }) => {
     const row = document.createElement('div');
     row.className = 'leaderboard-row';
     row.style.animationDelay = `${i * 0.05}s`;
-    row.innerHTML = `<span class="lb-rank">${i + 1}</span><span class="lb-name">${p.avatar} ${p.pseudo}</span><span class="lb-score">${p.score} pts</span>`;
+    row.innerHTML = `<span class="lb-rank">${i + 1}</span><img class="avatar-img-sm" src="${p.avatar}"><span class="lb-name">${p.pseudo}</span><span class="lb-score">${p.score} pts</span>`;
     lb.appendChild(row);
   });
 

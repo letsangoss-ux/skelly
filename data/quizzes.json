@@ -1,1 +1,69 @@
-[]
+[
+  {
+    "title": "Spécial Sacs — Lives Enchères",
+    "questions": [
+      {
+        "image": "/uploads/bag1.svg",
+        "answers": [
+          "Sac Dior Lady",
+          "Sac Louis Vuitton Neverfull",
+          "Sac Hermès Kelly",
+          "Sac Chanel Classic Flap"
+        ],
+        "correctIndex": 3,
+        "duration": 20,
+        "points": 1000
+      },
+      {
+        "image": "/uploads/bag2.svg",
+        "answers": [
+          "Sac Céline Triomphe",
+          "Sac Prada Galleria",
+          "Sac Chanel Boy",
+          "Sac Balenciaga City"
+        ],
+        "correctIndex": 1,
+        "duration": 20,
+        "points": 1000
+      },
+      {
+        "image": "/uploads/bag3.svg",
+        "answers": [
+          "Sac Fendi Baguette",
+          "Sac Bottega Veneta Jodie",
+          "Sac Gucci Marmont",
+          "Sac YSL Loulou"
+        ],
+        "correctIndex": 2,
+        "duration": 15,
+        "points": 1200
+      },
+      {
+        "image": "/uploads/bag4.svg",
+        "answers": [
+          "Sac Longchamp Pliage",
+          "Sac Coach Tabby",
+          "Sac Louis Vuitton Speedy",
+          "Sac Hermès Birkin"
+        ],
+        "correctIndex": 3,
+        "duration": 20,
+        "points": 1500
+      },
+      {
+        "image": "/uploads/bag5.svg",
+        "answers": [
+          "Sac Loewe Puzzle",
+          "Sac Miu Miu Wander",
+          "Sac Jacquemus Chiquito",
+          "Sac Staud Shirley"
+        ],
+        "correctIndex": 3,
+        "duration": 15,
+        "points": 1000
+      }
+    ],
+    "music": "/audio/music_1783216597562_544971.m4a",
+    "id": "demo-sacs-1"
+  }
+]

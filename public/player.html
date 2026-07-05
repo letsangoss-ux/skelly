@@ -23,7 +23,8 @@
       </div>
       <div class="field">
         <label>Choisis ton avatar</label>
-        <div class="avatar-grid" id="avatar-grid"></div>
+        <div class="avatar-gallery" id="avatar-grid"></div>
+        <input type="file" id="join-avatar-upload-input" accept="image/*" class="hidden">
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-join">Rejoindre</button>
@@ -35,9 +36,15 @@
   <!-- ÉCRAN 2 : salle d'attente -->
   <div id="screen-wait" class="screen hidden">
     <div class="card" style="text-align:center;">
-      <div id="wait-avatar" style="font-size:3rem;"></div>
-      <h2 id="wait-pseudo" style="margin-top:10px;"></h2>
+      <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
+      <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
       <p class="subtitle">La partie va bientôt commencer. Reste sur cet écran !</p>
+      <button class="change-avatar-btn" id="btn-change-avatar">Changer de photo</button>
+
+      <div class="avatar-picker-panel hidden" id="avatar-picker-panel">
+        <div class="avatar-gallery" id="wait-avatar-grid"></div>
+        <input type="file" id="wait-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
     </div>
   </div>
 
@@ -54,6 +61,7 @@
           <div class="timer-num" id="p-timer-num">20</div>
         </div>
       </div>
+      <div class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
       <div class="answers-grid" id="p-answers"></div>
       <div class="waiting-msg hidden" id="p-waiting-msg">Réponse envoyée, patiente...</div>
     </div>

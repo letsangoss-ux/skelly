@@ -18,6 +18,7 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'images')));
+app.use('/audio', express.static(path.join(__dirname, 'data', 'audio')));
 app.use(express.json({ limit: '2mb' }));
 
 const QUIZ_FILE = path.join(__dirname, 'data', 'quizzes.json');
@@ -80,6 +81,29 @@ const upload = multer({ storage: uploadStorage, limits: { fileSize: 8 * 1024 * 1
 app.post('/api/admin/upload', requireAdmin, upload.single('photo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Aucune photo reçue.' });
   res.json({ url: '/uploads/' + req.file.filename });
+});
+
+const audioStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'data', 'audio')),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.mp3';
+    cb(null, 'music_' + Date.now() + '_' + Math.round(Math.random() * 1e6) + ext);
+  },
+});
+const uploadAudio = multer({
+  storage: audioStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('audio/')) return cb(new Error('Fichier audio non valide'));
+    cb(null, true);
+  },
+});
+
+app.post('/api/admin/upload-audio', requireAdmin, (req, res) => {
+  uploadAudio.single('music')(req, res, (err) => {
+    if (err || !req.file) return res.status(400).json({ error: "Impossible d'importer ce fichier audio." });
+    res.json({ url: '/audio/' + req.file.filename });
+  });
 });
 
 app.get('/api/admin/quizzes', requireAdmin, (req, res) => {

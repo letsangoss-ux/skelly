@@ -53,6 +53,9 @@
         </div>
       </div>
       <div class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
+      <div style="text-align:center; margin-bottom:14px;">
+        <button class="btn-expand" id="btn-expand-photo">⛶ Afficher la photo en plein écran</button>
+      </div>
       <div class="answers-grid" id="q-answers-host"></div>
       <div class="waiting-msg"><span id="answered-count">0</span> / <span id="total-players">0</span> ont répondu</div>
       <div class="host-controls">
@@ -87,6 +90,9 @@
       </div>
     </div>
   </div>
+
+  <audio id="bg-music" loop></audio>
+  <button class="change-avatar-btn hidden" id="btn-toggle-music" style="position:fixed; top:16px; right:16px; z-index:50;">🔊 Musique</button>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

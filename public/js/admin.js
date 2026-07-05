@@ -1,5 +1,6 @@
 let adminToken = localStorage.getItem('adminToken') || null;
 let editingQuizId = null; // null = création
+let currentMusicUrl = null;
 
 const screens = {
   login: document.getElementById('screen-login'),
@@ -77,7 +78,7 @@ async function loadDashboard() {
     item.innerHTML = `
       <div class="qli-info">
         <div class="qli-title">${escapeHtml(quiz.title)}</div>
-        <div class="qli-meta">${quiz.questions.length} question${quiz.questions.length > 1 ? 's' : ''}</div>
+        <div class="qli-meta">${quiz.questions.length} question${quiz.questions.length > 1 ? 's' : ''}${quiz.music ? ' · 🎵 musique de fond' : ''}</div>
       </div>
       <div class="qli-actions">
         <button class="btn btn-primary btn-launch">Lancer</button>
@@ -145,6 +146,9 @@ function openEditor(quiz) {
   document.getElementById('questions-list').innerHTML = '';
   document.getElementById('editor-error').textContent = '';
 
+  currentMusicUrl = quiz && quiz.music ? quiz.music : null;
+  updateMusicUI();
+
   if (quiz && quiz.questions.length) {
     quiz.questions.forEach((q) => addQuestionCard(q));
   } else {
@@ -152,6 +156,41 @@ function openEditor(quiz) {
   }
   showScreen('editor');
 }
+
+function updateMusicUI() {
+  const currentBlock = document.getElementById('music-current');
+  const preview = document.getElementById('music-preview');
+  if (currentMusicUrl) {
+    preview.src = currentMusicUrl;
+    currentBlock.classList.remove('hidden');
+  } else {
+    preview.src = '';
+    currentBlock.classList.add('hidden');
+  }
+}
+
+document.getElementById('music-upload-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('music', file);
+  try {
+    const res = await api('/api/admin/upload-audio', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.url) {
+      currentMusicUrl = data.url;
+      updateMusicUI();
+    }
+  } catch (err) {
+    document.getElementById('editor-error').textContent = "Impossible d'importer ce fichier audio.";
+  }
+  e.target.value = '';
+});
+
+document.getElementById('btn-remove-music').addEventListener('click', () => {
+  currentMusicUrl = null;
+  updateMusicUI();
+});
 
 function addQuestionCard(question) {
   const template = document.getElementById('question-card-template');
@@ -246,7 +285,7 @@ async function saveQuiz() {
     questions.push({ image: photoUrl, answers, correctIndex, duration, points });
   }
 
-  const payload = { title, questions };
+  const payload = { title, questions, music: currentMusicUrl || null };
   try {
     if (editingQuizId) {
       await api(`/api/admin/quizzes/${editingQuizId}`, {

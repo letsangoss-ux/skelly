@@ -4,9 +4,27 @@ let currentQuiz = null;
 let gameCode = null;
 let timerInterval = null;
 let currentQuestionIndex = 0;
+let musicMuted = false;
 
 const urlParams = new URLSearchParams(window.location.search);
 const presetQuizId = urlParams.get('quizId');
+
+const screens = {
+  create: document.getElementById('screen-create'),
+  lobby: document.getElementById('screen-lobby'),
+  question: document.getElementById('screen-question'),
+  reveal: document.getElementById('screen-reveal'),
+  podium: document.getElementById('screen-podium'),
+};
+
+function showScreen(name) {
+  Object.values(screens).forEach((s) => s.classList.add('hidden'));
+  screens[name].classList.remove('hidden');
+}
+
+function avatarImg(p, cls) {
+  return `<img class="${cls}" src="${p.avatar}" alt="${p.pseudo}">`;
+}
 
 // ---------- Écran 1 : choisir / créer la partie ----------
 async function initCreateScreen() {
@@ -17,9 +35,7 @@ async function initCreateScreen() {
       const res = await fetch('/api/quizzes');
       const quizzes = await res.json();
       const quiz = quizzes.find((q) => q.id === presetQuizId);
-      if (quiz) {
-        document.getElementById('create-subtitle').textContent = `Quiz choisi : « ${quiz.title} »`;
-      }
+      if (quiz) document.getElementById('create-subtitle').textContent = `Quiz choisi : « ${quiz.title} »`;
     } catch (e) { /* ignore */ }
     return;
   }
@@ -49,19 +65,34 @@ document.getElementById('btn-create').addEventListener('click', () => {
   socket.emit('host:create-game', { quizId: presetQuizId });
 });
 
-const screens = {
-  create: document.getElementById('screen-create'),
-  lobby: document.getElementById('screen-lobby'),
-  question: document.getElementById('screen-question'),
-  reveal: document.getElementById('screen-reveal'),
-  podium: document.getElementById('screen-podium'),
-};
+// ---------- Musique de fond ----------
+const bgMusic = document.getElementById('bg-music');
+const btnToggleMusic = document.getElementById('btn-toggle-music');
 
-function showScreen(name) {
-  Object.values(screens).forEach((s) => s.classList.add('hidden'));
-  screens[name].classList.remove('hidden');
+function playMusicIfAny() {
+  if (currentQuiz && currentQuiz.music) {
+    bgMusic.src = currentQuiz.music;
+    bgMusic.muted = musicMuted;
+    bgMusic.play().catch(() => { /* autoplay bloqué : le bouton musique permet de relancer */ });
+    btnToggleMusic.classList.remove('hidden');
+  } else {
+    btnToggleMusic.classList.add('hidden');
+  }
 }
 
+btnToggleMusic.addEventListener('click', () => {
+  musicMuted = !musicMuted;
+  bgMusic.muted = musicMuted;
+  btnToggleMusic.textContent = musicMuted ? '🔇 Musique' : '🔊 Musique';
+  if (!musicMuted && bgMusic.paused) bgMusic.play().catch(() => {});
+});
+
+function stopMusic() {
+  bgMusic.pause();
+  bgMusic.currentTime = 0;
+}
+
+// ---------- Créer la partie ----------
 socket.on('host:game-created', ({ code, quiz }) => {
   gameCode = code;
   currentQuiz = quiz;
@@ -78,6 +109,7 @@ socket.on('host:game-created', ({ code, quiz }) => {
   });
 
   showScreen('lobby');
+  playMusicIfAny();
 });
 
 // ---------- Joueurs qui rejoignent ----------
@@ -88,7 +120,7 @@ socket.on('host:player-joined', ({ players }) => {
   players.forEach((p) => {
     const el = document.createElement('div');
     el.className = 'player-pill';
-    el.textContent = `${p.avatar} ${p.pseudo}`;
+    el.innerHTML = `${avatarImg(p, 'avatar-img-sm')} ${p.pseudo}`;
     pills.appendChild(el);
   });
 });
@@ -98,16 +130,14 @@ document.getElementById('btn-start').addEventListener('click', () => {
   socket.emit('host:start-game');
 });
 
-socket.on('game:started', () => {
-  // la première question arrive via question:show
-});
-
 // ---------- Afficher une question ----------
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
+let currentAnswersText = [];
 
 socket.on('question:show', (q) => {
   showScreen('question');
   currentQuestionIndex = q.index;
+  currentAnswersText = q.answers;
   document.getElementById('q-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('q-image').src = q.image;
   document.getElementById('answered-count').textContent = '0';
@@ -151,43 +181,70 @@ function startTimer(duration) {
   }, 1000);
 }
 
+// ---------- Photo en plein écran ----------
+document.getElementById('btn-expand-photo').addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'fullscreen-photo-overlay';
+  overlay.innerHTML = `<img src="${document.getElementById('q-image').src}" alt="Photo en grand">`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+  const escHandler = (e) => {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+  };
+  document.addEventListener('keydown', escHandler);
+});
+
 // ---------- Révéler ----------
 document.getElementById('btn-reveal').addEventListener('click', () => {
   socket.emit('host:reveal');
 });
 
+function rankChangeHtml(p) {
+  if (p.isNew || !p.rankChange) return '<span class="lb-rank-change same">—</span>';
+  if (p.rankChange > 0) return `<span class="lb-rank-change up">▲ ${p.rankChange}</span>`;
+  return `<span class="lb-rank-change down">▼ ${Math.abs(p.rankChange)}</span>`;
+}
+
+function renderLeaderboard(container, leaderboard, withRankChange) {
+  container.innerHTML = '';
+  leaderboard.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'leaderboard-row';
+    row.style.animationDelay = `${i * 0.05}s`;
+    row.innerHTML = `
+      <span class="lb-rank">${i + 1}</span>
+      ${avatarImg(p, 'avatar-img-sm')}
+      <span class="lb-name">${p.pseudo}</span>
+      <span class="lb-score">${p.score} pts</span>
+      ${withRankChange ? rankChangeHtml(p) : ''}
+    `;
+    container.appendChild(row);
+  });
+}
+
 socket.on('question:reveal', ({ correctIndex, stats, leaderboard }) => {
   clearInterval(timerInterval);
   showScreen('reveal');
 
-  const answerBtns = document.querySelectorAll('#q-answers-host .answer-btn');
   const total = stats.reduce((a, b) => a + b, 0) || 1;
   const bars = document.getElementById('stats-bars');
   bars.innerHTML = '';
   stats.forEach((count, i) => {
     const pct = Math.round((count / total) * 100);
+    const isCorrect = i === correctIndex;
     const row = document.createElement('div');
     row.className = 'stat-bar-row';
     row.innerHTML = `
-      <span class="answer-shape ${answerColors[i]}" style="width:14px;height:14px;border-radius:4px;"></span>
+      <span class="answer-shape ${answerColors[i]}" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;"></span>
+      <span style="min-width:130px; ${isCorrect ? 'color:var(--gold);font-weight:700;' : ''}">${currentAnswersText[i]}${isCorrect ? ' ✓' : ''}</span>
       <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
-      <span style="min-width:40px;text-align:right;">${count}</span>
+      <span style="min-width:30px;text-align:right;">${count}</span>
     `;
     bars.appendChild(row);
   });
 
-  const correctText = currentQuiz ? currentQuiz.questions[currentQuestionIndex].answers[correctIndex] : '';
-  document.getElementById('reveal-answer-text').textContent = `Bonne réponse : ${correctText}`;
-
-  const lb = document.getElementById('reveal-leaderboard');
-  lb.innerHTML = '';
-  leaderboard.forEach((p, i) => {
-    const row = document.createElement('div');
-    row.className = 'leaderboard-row';
-    row.style.animationDelay = `${i * 0.05}s`;
-    row.innerHTML = `<span class="lb-rank">${i + 1}</span><span class="lb-name">${p.avatar} ${p.pseudo}</span><span class="lb-score">${p.score} pts</span>`;
-    lb.appendChild(row);
-  });
+  document.getElementById('reveal-answer-text').textContent = `Bonne réponse : ${currentAnswersText[correctIndex]}`;
+  renderLeaderboard(document.getElementById('reveal-leaderboard'), leaderboard, true);
 });
 
 // ---------- Question suivante ----------
@@ -198,6 +255,7 @@ document.getElementById('btn-next').addEventListener('click', () => {
 // ---------- Fin de partie ----------
 socket.on('game:over', ({ leaderboard }) => {
   showScreen('podium');
+  stopMusic();
   const top3 = leaderboard.slice(0, 3);
   const stage = document.getElementById('podium-stage');
   stage.innerHTML = '';
@@ -211,22 +269,14 @@ socket.on('game:over', ({ leaderboard }) => {
     const col = document.createElement('div');
     col.className = `podium-col ${posClass}`;
     col.innerHTML = `
-      <div class="podium-avatar">${p.avatar}</div>
+      ${avatarImg(p, 'avatar-img-podium')}
       <div>${p.pseudo}</div>
       <div class="podium-block ${heightClass}">${idx + 1}</div>
     `;
     stage.appendChild(col);
   });
 
-  const lb = document.getElementById('final-leaderboard');
-  lb.innerHTML = '';
-  leaderboard.forEach((p, i) => {
-    const row = document.createElement('div');
-    row.className = 'leaderboard-row';
-    row.style.animationDelay = `${i * 0.05}s`;
-    row.innerHTML = `<span class="lb-rank">${i + 1}</span><span class="lb-name">${p.avatar} ${p.pseudo}</span><span class="lb-score">${p.score} pts</span>`;
-    lb.appendChild(row);
-  });
+  renderLeaderboard(document.getElementById('final-leaderboard'), leaderboard, false);
 
   if (window.confetti) {
     confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
