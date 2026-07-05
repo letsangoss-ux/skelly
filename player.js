@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Joueur — Le Quiz des Sacs</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ÉCRAN 1 : rejoindre -->
+  <div id="screen-join" class="screen">
+    <div class="card">
+      <div class="eyebrow" style="text-align:center;display:block;">Rejoindre la partie</div>
+      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
+      <div class="field">
+        <label for="input-code">Code de la partie</label>
+        <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="input-pseudo">Ton pseudo</label>
+        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Choisis ton avatar</label>
+        <div class="avatar-gallery" id="avatar-grid"></div>
+        <input type="file" id="join-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-join">Rejoindre</button>
+      </div>
+      <div class="error-msg" id="join-error"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : salle d'attente -->
+  <div id="screen-wait" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
+      <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
+      <p class="subtitle">La partie va bientôt commencer. Reste sur cet écran !</p>
+      <button class="change-avatar-btn" id="btn-change-avatar">Changer de photo</button>
+
+      <div class="avatar-picker-panel hidden" id="avatar-picker-panel">
+        <div class="avatar-gallery" id="wait-avatar-grid"></div>
+        <input type="file" id="wait-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 3 : question -->
+  <div id="screen-play" class="screen hidden">
+    <div class="question-wrap">
+      <div class="progress-row">
+        <span id="p-progress">Question 1 / 5</span>
+        <div class="timer-ring">
+          <svg width="64" height="64">
+            <circle class="bg" cx="32" cy="32" r="27"></circle>
+            <circle class="fg" id="p-timer-circle" cx="32" cy="32" r="27"></circle>
+          </svg>
+          <div class="timer-num" id="p-timer-num">20</div>
+        </div>
+      </div>
+      <div id="p-multi-banner" class="info-banner hidden">🔢 Plusieurs bonnes réponses possibles</div>
+      <h2 id="p-question-text" class="title-xl hidden" style="text-align:center; margin-bottom:14px; font-size:1.3rem;"></h2>
+      <div id="p-photo-frame" class="bag-photo-frame small-frame"><img id="p-image" src="" alt="Photo du sac"></div>
+      <div class="answers-grid" id="p-answers"></div>
+      <div class="waiting-msg hidden" id="p-waiting-msg">Réponse envoyée, patiente...</div>
+      <div class="reaction-bar" id="reaction-bar">
+        <button class="reaction-btn" data-emoji="😂">😂</button>
+        <button class="reaction-btn" data-emoji="😮">😮</button>
+        <button class="reaction-btn" data-emoji="🔥">🔥</button>
+        <button class="reaction-btn" data-emoji="😅">😅</button>
+        <button class="reaction-btn" data-emoji="👏">👏</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4 : résultat de la question -->
+  <div id="screen-result" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <div class="result-badge" id="result-emoji"></div>
+      <h2 id="result-text"></h2>
+      <div class="points-earned" id="result-points"></div>
+      <p class="subtitle">Score total : <strong id="result-total"></strong></p>
+      <div id="result-streak" class="streak-badge hidden"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 5 : podium final -->
+  <div id="screen-final" class="screen hidden">
+    <div class="podium-wrap">
+      <div class="eyebrow">Partie terminée</div>
+      <h1 class="title-xl" id="final-title"></h1>
+      <div class="awards-list" id="final-awards"></div>
+      <div class="leaderboard" id="final-player-leaderboard" style="margin:24px auto 0;"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="/js/player.js"></script>
+</body>
+</html>
