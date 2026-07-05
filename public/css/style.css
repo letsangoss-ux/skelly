@@ -761,3 +761,24 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 .global-lb-row .glb-wins { color: var(--gold); font-weight: 700; }
 .global-lb-row .glb-meta { color: var(--cream-dim); font-size: 0.8rem; }
 
+/* ---------- NOUVELLES REGLES POUR LES BOUTONS (REPONSES MULTIPLES) ---------- */
+.answer-btn { 
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease, border 0.15s ease; 
+  border: 3px solid transparent; 
+}
+.answer-btn:hover:not(:disabled) { 
+  filter: brightness(1.1); 
+  transform: translateY(-2px); 
+}
+.answer-btn.chosen { 
+  border-color: var(--gold); 
+  box-shadow: 0 0 15px rgba(198,166,100,0.5); 
+  transform: scale(1.02); 
+}
+
+/* Atténue les autres boutons quand on a fait un choix et validé */
+#p-answers.disabled-state .answer-btn:not(.chosen) { 
+  opacity: 0.5; 
+  filter: grayscale(50%); 
+}
+
