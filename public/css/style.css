@@ -883,3 +883,93 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 .global-lb-row .glb-wins { color: var(--gold); font-weight: 700; }
 .global-lb-row .glb-meta { color: var(--cream-dim); font-size: 0.8rem; }
 
+/* ---------- MODE IMPOSTEUR ---------- */
+.uc-table {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  justify-content: center;
+  max-width: 900px;
+  margin: 30px auto;
+}
+.uc-player-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 110px;
+  padding: 14px 10px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(198,166,100,0.15);
+  transition: all 0.25s ease;
+}
+.uc-player-card img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(198,166,100,0.4);
+}
+.uc-player-card .uc-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-align: center;
+  word-break: break-word;
+}
+.uc-player-card.active {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  transform: scale(1.08);
+  box-shadow: 0 0 24px rgba(198,166,100,0.4);
+}
+.uc-player-card.active img { border-color: var(--gold); }
+.uc-player-card .uc-word {
+  font-size: 0.78rem;
+  color: var(--cream-dim);
+  text-align: center;
+}
+.uc-player-card.is-impostor {
+  border-color: var(--red);
+  background: rgba(140,59,59,0.15);
+}
+.uc-player-card.is-impostor .uc-word,
+.uc-player-card.is-impostor .uc-name { color: #E39C9C; }
+.uc-player-card.most-voted { outline: 2px dashed var(--gold); outline-offset: 3px; }
+.uc-vote-count {
+  font-size: 0.7rem;
+  color: var(--gold);
+  font-weight: 700;
+}
+.uc-player-card.clickable { cursor: pointer; }
+.uc-player-card.clickable:hover { border-color: var(--gold); }
+.uc-player-card.voted-for { border-color: var(--gold); background: var(--gold-soft); }
+
+.uc-word-reveal {
+  text-align: center;
+  padding: 50px 20px;
+}
+.uc-word-big {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(2.2rem, 8vw, 3.6rem);
+  color: var(--gold);
+  margin: 20px 0;
+  animation: popIn 0.5s ease both;
+}
+.uc-impostor-reveal {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: clamp(1.6rem, 6vw, 2.4rem);
+  color: #E39C9C;
+  margin: 20px 0;
+  animation: popIn 0.5s ease both;
+}
+.uc-result-banner {
+  font-family: 'Fraunces', serif;
+  font-size: 1.6rem;
+  text-align: center;
+  margin: 10px 0 26px;
+}
+.uc-result-banner.caught { color: var(--green); }
+.uc-result-banner.escaped { color: #E39C9C; }
+

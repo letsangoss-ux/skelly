@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Imposteur — Joueur</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ÉCRAN 1 : rejoindre -->
+  <div id="screen-join" class="screen">
+    <div class="card">
+      <div class="eyebrow" style="text-align:center;display:block;">Mode Imposteur</div>
+      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
+      <div class="field">
+        <label for="input-code">Code de la partie</label>
+        <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="input-pseudo">Ton pseudo</label>
+        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Choisis ton avatar</label>
+        <div class="avatar-gallery" id="avatar-grid"></div>
+        <input type="file" id="join-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-join">Rejoindre</button>
+      </div>
+      <div class="error-msg" id="join-error"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : salle d'attente -->
+  <div id="screen-wait" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
+      <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
+      <p class="subtitle">La partie va bientôt commencer. Reste sur cet écran !</p>
+      <button class="change-avatar-btn" id="btn-change-avatar">Changer de photo</button>
+      <div class="avatar-picker-panel hidden" id="avatar-picker-panel">
+        <div class="avatar-gallery" id="wait-avatar-grid"></div>
+        <input type="file" id="wait-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 3 : révélation privée du mot -->
+  <div id="screen-your-word" class="screen hidden">
+    <div class="uc-word-reveal">
+      <div class="eyebrow">Ton rôle</div>
+      <div id="civilian-block" class="hidden">
+        <p class="subtitle">Ton mot secret est :</p>
+        <div class="uc-word-big" id="your-word-text"></div>
+        <p class="subtitle">Donne un indice à voix haute sans jamais dire ce mot !</p>
+      </div>
+      <div id="impostor-block" class="hidden">
+        <div class="uc-impostor-reveal">🎭 Tu es l'IMPOSTEUR</div>
+        <p class="subtitle">Tu n'as aucun mot. Écoute bien les autres et bluffe pour te fondre dans la masse !</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4 : tour de table (affichage seul, pas d'action) -->
+  <div id="screen-turns" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="eyebrow">Tour <span id="turn-round">1</span></div>
+      <h2 class="title-xl" id="turn-indicator" style="font-size:1.4rem;">C'est au tour de...</h2>
+      <p class="subtitle">Regardez l'écran principal pour suivre le tour de table.</p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 5 : vote -->
+  <div id="screen-vote" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="eyebrow">À vous de juger</div>
+      <h1 class="title-xl">Qui est l'imposteur ?</h1>
+      <div class="uc-table" id="uc-vote-table"></div>
+      <p class="subtitle hidden" id="vote-confirmed">✅ Vote envoyé, en attente des autres...</p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 6 : révélation -->
+  <div id="screen-reveal" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="eyebrow">Révélation</div>
+      <h1 class="title-xl">Le mot était : <span id="reveal-word" style="color:var(--gold);"></span></h1>
+      <div class="uc-result-banner" id="reveal-result-banner"></div>
+      <div class="uc-table" id="uc-table-reveal"></div>
+      <p class="subtitle" style="margin-top:20px;">En attente de l'animateur pour la suite...</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="/js/impostor-player.js"></script>
+</body>
+</html>

@@ -447,6 +447,218 @@ io.on('connection', (socket) => {
   });
 });
 
+// ============================================================
+// MODE "IMPOSTEUR" (Undercover) — jeu indépendant du quiz.
+// Tous les joueurs reçoivent le même mot secret, sauf un seul
+// "imposteur" qui ne reçoit aucun mot et doit bluffer.
+// ============================================================
+const UNDERCOVER_WORDS_FILE = path.join(__dirname, 'data', 'undercover-words.json');
+function loadUndercoverWords() {
+  if (!fs.existsSync(UNDERCOVER_WORDS_FILE)) fs.writeFileSync(UNDERCOVER_WORDS_FILE, '[]');
+  return JSON.parse(fs.readFileSync(UNDERCOVER_WORDS_FILE, 'utf-8'));
+}
+
+function ucPlayersForHost(game) {
+  return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
+}
+function ucPublicOrder(game) {
+  // Liste ordonnée des joueurs (avatar + nom uniquement, jamais le mot) pour l'affichage "tour de table"
+  return game.order.map((socketId) => {
+    const p = game.players[socketId];
+    return { socketId, pseudo: p.pseudo, avatar: p.avatar };
+  });
+}
+
+io.on('connection', (socket) => {
+  socket.on('uc:create-game', () => {
+    const code = generateCode();
+    games[code] = {
+      code,
+      mode: 'undercover',
+      hostSocketId: socket.id,
+      players: {},
+      playerIdIndex: {},
+      state: 'lobby', // lobby -> turns -> voting -> reveal
+      order: [],
+      currentTurnIndex: 0,
+      round: 1,
+      word: null,
+      impostorSocketId: null,
+      votes: {},
+    };
+    socket.join(code);
+    socket.data.role = 'uc-host';
+    socket.data.code = code;
+    socket.emit('uc:game-created', { code });
+  });
+
+  socket.on('uc:join-game', ({ code, pseudo, avatar, playerId }) => {
+    code = (code || '').toUpperCase().trim();
+    const game = games[code];
+    if (!game || game.mode !== 'undercover') return socket.emit('uc:join-error', { message: 'Code introuvable. Vérifiez le code et réessayez.' });
+
+    const existingSocketId = playerId && game.playerIdIndex[playerId];
+    if (existingSocketId && game.players[existingSocketId]) {
+      const player = game.players[existingSocketId];
+      delete game.players[existingSocketId];
+      game.players[socket.id] = player;
+      game.playerIdIndex[playerId] = socket.id;
+      game.order = game.order.map((id) => (id === existingSocketId ? socket.id : id));
+      if (game.impostorSocketId === existingSocketId) game.impostorSocketId = socket.id;
+      socket.join(code);
+      socket.data.role = 'uc-player';
+      socket.data.code = code;
+      socket.data.playerId = playerId;
+      socket.emit('uc:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
+      if (game.hostSocketId) io.to(game.hostSocketId).emit('uc:player-joined', { players: ucPlayersForHost(game) });
+      return;
+    }
+
+    if (game.state !== 'lobby') return socket.emit('uc:join-error', { message: 'La partie a déjà commencé.' });
+
+    const cleanPseudo = (pseudo || 'Joueur').trim().slice(0, 16);
+    const pid = playerId || crypto.randomBytes(8).toString('hex');
+    game.players[socket.id] = { playerId: pid, pseudo: cleanPseudo, avatar: avatar || '/avatars/avatar1.svg' };
+    game.playerIdIndex[pid] = socket.id;
+    socket.join(code);
+    socket.data.role = 'uc-player';
+    socket.data.code = code;
+    socket.data.playerId = pid;
+    socket.emit('uc:joined', { code, pseudo: cleanPseudo, avatar, playerId: pid });
+    io.to(game.hostSocketId).emit('uc:player-joined', { players: ucPlayersForHost(game) });
+  });
+
+  socket.on('uc:update-avatar', ({ avatar }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover') return;
+    const player = game.players[socket.id];
+    if (!player || !avatar) return;
+    player.avatar = avatar;
+    if (game.hostSocketId) io.to(game.hostSocketId).emit('uc:player-joined', { players: ucPlayersForHost(game) });
+  });
+
+  function ucStartManche(game) {
+    const playerIds = Object.keys(game.players);
+    const words = loadUndercoverWords();
+    game.word = words.length ? words[Math.floor(Math.random() * words.length)] : 'Mot mystère';
+    game.impostorSocketId = playerIds[Math.floor(Math.random() * playerIds.length)];
+    // Ordre de passage mélangé à chaque manche
+    game.order = [...playerIds].sort(() => Math.random() - 0.5);
+    game.currentTurnIndex = 0;
+    game.state = 'turns';
+    game.votes = {};
+
+    io.to(game.hostSocketId).emit('uc:manche-started', { order: ucPublicOrder(game), round: game.round });
+    io.to(game.code).emit('uc:manche-started-players', { order: ucPublicOrder(game) });
+
+    playerIds.forEach((socketId) => {
+      const isImpostor = socketId === game.impostorSocketId;
+      io.to(socketId).emit('uc:your-word', { word: isImpostor ? null : game.word, isImpostor });
+    });
+
+    io.to(game.code).emit('uc:turn-changed', { socketId: game.order[0], round: game.round });
+  }
+
+  socket.on('uc:host-start', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover') return;
+    if (Object.keys(game.players).length < 3) {
+      socket.emit('uc:error', { message: 'Il faut au moins 3 joueurs pour commencer.' });
+      return;
+    }
+    game.round = 1;
+    ucStartManche(game);
+  });
+
+  socket.on('uc:next-turn', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover' || game.state !== 'turns') return;
+    game.currentTurnIndex++;
+    if (game.currentTurnIndex >= game.order.length) {
+      game.currentTurnIndex = 0;
+      game.round++;
+    }
+    io.to(game.code).emit('uc:turn-changed', { socketId: game.order[game.currentTurnIndex], round: game.round });
+  });
+
+  socket.on('uc:start-vote', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover') return;
+    game.state = 'voting';
+    game.votes = {};
+    io.to(game.code).emit('uc:voting-started', { order: ucPublicOrder(game) });
+  });
+
+  socket.on('uc:submit-vote', ({ votedSocketId }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover' || game.state !== 'voting') return;
+    if (!game.players[votedSocketId]) return;
+    game.votes[socket.id] = votedSocketId;
+    socket.emit('uc:vote-received');
+    io.to(game.hostSocketId).emit('uc:votes-update', {
+      votedCount: Object.keys(game.votes).length,
+      totalPlayers: Object.keys(game.players).length,
+    });
+  });
+
+  function ucReveal(game) {
+    game.state = 'reveal';
+    const tally = {};
+    Object.values(game.votes).forEach((votedId) => { tally[votedId] = (tally[votedId] || 0) + 1; });
+    let mostVotedSocketId = null;
+    let maxVotes = -1;
+    Object.entries(tally).forEach(([socketId, count]) => {
+      if (count > maxVotes) { maxVotes = count; mostVotedSocketId = socketId; }
+    });
+
+    const players = Object.entries(game.players).map(([socketId, p]) => ({
+      socketId, pseudo: p.pseudo, avatar: p.avatar,
+      word: socketId === game.impostorSocketId ? null : game.word,
+      isImpostor: socketId === game.impostorSocketId,
+      votes: tally[socketId] || 0,
+    }));
+
+    io.to(game.code).emit('uc:reveal', {
+      players,
+      word: game.word,
+      impostorSocketId: game.impostorSocketId,
+      mostVotedSocketId,
+      impostorCaught: mostVotedSocketId === game.impostorSocketId,
+    });
+  }
+
+  socket.on('uc:force-reveal', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'undercover') ucReveal(game);
+  });
+
+  socket.on('uc:new-manche', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover') return;
+    game.round = 1;
+    ucStartManche(game);
+  });
+
+  socket.on('uc:end-game', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'undercover') return;
+    io.to(game.code).emit('uc:game-ended');
+    delete games[game.code];
+  });
+
+  socket.on('disconnect', () => {
+    const code = socket.data.code;
+    if (!code || !games[code] || games[code].mode !== 'undercover') return;
+    const game = games[code];
+    if (socket.data.role === 'uc-player') {
+      io.to(game.hostSocketId).emit('uc:player-joined', { players: ucPlayersForHost(game) });
+    } else if (socket.data.role === 'uc-host') {
+      io.to(code).emit('uc:host-left');
+      delete games[code];
+    }
+  });
+});
+
 function scheduleAutoReveal(game, remainingMs) {
   clearTimeout(game.autoRevealTimer);
   game.autoRevealRemainingMs = remainingMs;
