@@ -425,11 +425,15 @@ io.on('connection', (socket) => {
     if (game.answers[qIndex][socket.id]) return;
     const timeMs = Date.now() - game.questionStartedAt;
     game.answers[qIndex][socket.id] = { answerIndex, timeMs };
-    io.to(game.hostSocketId).emit('host:player-answered', {
-      answeredCount: Object.keys(game.answers[qIndex]).length,
-      totalPlayers: Object.keys(game.players).length,
-    });
+    const answeredCount = Object.keys(game.answers[qIndex]).length;
+    const totalPlayers = Object.keys(game.players).length;
+    io.to(game.hostSocketId).emit('host:player-answered', { answeredCount, totalPlayers });
     socket.emit('player:answer-received');
+
+    // Tout le monde a répondu : on révèle tout de suite, pas besoin d'attendre la fin du chrono
+    if (totalPlayers > 0 && answeredCount >= totalPlayers) {
+      revealAnswer(game);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -781,6 +785,305 @@ function endGame(game) {
     console.error("Impossible d'enregistrer l'historique :", e);
   }
 }
+
+// ============================================================
+// MODE "RÉSILIANCE" — chacun écrit une anecdote, puis tout le
+// monde devine EN MÊME TEMPS (sur une anecdote différente à
+// chaque manche) qui a écrit quoi. Personne n'attend jamais :
+// à chaque manche, tous les joueurs devinent simultanément,
+// chacun sur une anecdote différente (jamais la sienne).
+// ============================================================
+const RES_WRITING_DURATION_MS = 45000;
+const RES_GUESS_ROUND_DURATION_MS = 20000;
+
+function resPlayersForHost(game) {
+  return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
+}
+
+// Pour la manche game.round (1-indexée), chaque joueur à la position i de
+// game.order devine l'anecdote de l'auteur à la position (i + round) % N.
+// Cette rotation garantit : jamais sa propre anecdote, et après N-1 manches,
+// chaque joueur a deviné l'anecdote de tous les autres exactement une fois.
+function resBuildRoundAssignment(game) {
+  const N = game.order.length;
+  const assignment = {};
+  game.order.forEach((guesserSocketId, i) => {
+    assignment[guesserSocketId] = game.order[(i + game.round) % N];
+  });
+  return assignment;
+}
+
+function resSendRound(game) {
+  clearTimeout(game.roundTimer);
+  game.roundGuesses = {};
+  game.currentAssignment = resBuildRoundAssignment(game);
+  const totalRounds = game.order.length - 1;
+
+  const optionsList = game.order
+    .filter((sid) => game.players[sid])
+    .map((sid) => ({ socketId: sid, pseudo: game.players[sid].pseudo, avatar: game.players[sid].avatar }));
+
+  Object.entries(game.currentAssignment).forEach(([guesserSocketId, authorSocketId]) => {
+    io.to(guesserSocketId).emit('res:your-turn-to-guess', {
+      text: game.anecdotes[authorSocketId],
+      options: optionsList,
+      round: game.round,
+      totalRounds,
+    });
+  });
+  io.to(game.code).emit('res:round-started', {
+    round: game.round,
+    totalRounds,
+    duration: RES_GUESS_ROUND_DURATION_MS / 1000,
+  });
+  game.roundTimer = setTimeout(() => resFinishRound(game), RES_GUESS_ROUND_DURATION_MS + 400);
+}
+
+function resFinishRound(game) {
+  if (game.state !== 'guessing') return;
+  clearTimeout(game.roundTimer);
+
+  Object.entries(game.currentAssignment).forEach(([guesserSocketId, authorSocketId]) => {
+    if (!game.guesses[authorSocketId]) game.guesses[authorSocketId] = {};
+    if (game.roundGuesses[guesserSocketId] !== undefined) {
+      game.guesses[authorSocketId][guesserSocketId] = game.roundGuesses[guesserSocketId];
+    }
+  });
+
+  const totalRounds = game.order.length - 1;
+  if (game.round >= totalRounds) {
+    resStartReveal(game);
+  } else {
+    game.round++;
+    resSendRound(game);
+  }
+}
+
+function resStartReveal(game) {
+  game.state = 'reveal';
+  game.revealIndex = 0;
+  io.to(game.code).emit('res:guessing-done');
+}
+
+function resSendCurrentReveal(game) {
+  const authorSocketId = game.order[game.revealIndex];
+  const author = game.players[authorSocketId];
+  if (!author) { // l'auteur s'est déconnecté définitivement : on saute sa révélation
+    game.revealIndex++;
+    if (game.revealIndex >= game.order.length) { io.to(game.code).emit('res:reveal-done'); return; }
+    return resSendCurrentReveal(game);
+  }
+  const guessesForThis = game.guesses[authorSocketId] || {};
+  const guessList = Object.entries(guessesForThis).map(([guesserSocketId, guessedSocketId]) => {
+    const guesser = game.players[guesserSocketId];
+    const guessed = game.players[guessedSocketId];
+    return {
+      guesserPseudo: guesser ? guesser.pseudo : '?',
+      guesserAvatar: guesser ? guesser.avatar : '/avatars/avatar1.svg',
+      guessedPseudo: guessed ? guessed.pseudo : '(pas de réponse)',
+      guessedAvatar: guessed ? guessed.avatar : '/avatars/avatar1.svg',
+      correct: guessedSocketId === authorSocketId,
+    };
+  });
+  io.to(game.code).emit('res:reveal-anecdote', {
+    authorPseudo: author.pseudo,
+    authorAvatar: author.avatar,
+    text: game.anecdotes[authorSocketId],
+    guesses: guessList,
+    index: game.revealIndex,
+    total: game.order.length,
+  });
+}
+
+function resFinishWriting(game) {
+  if (game.state !== 'writing') return;
+  clearTimeout(game.writingTimer);
+  const authorIds = Object.keys(game.anecdotes);
+  if (authorIds.length < 3) {
+    io.to(game.hostSocketId).emit('res:error', { message: "Pas assez d'anecdotes reçues (3 minimum) pour continuer." });
+    game.state = 'lobby';
+    return;
+  }
+  game.order = [...authorIds].sort(() => Math.random() - 0.5);
+  game.round = 1;
+  game.guesses = {};
+  game.state = 'guessing';
+  resSendRound(game);
+}
+
+function resStartWritingPhase(game) {
+  game.state = 'writing';
+  game.anecdotes = {};
+  io.to(game.code).emit('res:writing-started', { duration: RES_WRITING_DURATION_MS / 1000 });
+  clearTimeout(game.writingTimer);
+  game.writingTimer = setTimeout(() => resFinishWriting(game), RES_WRITING_DURATION_MS + 400);
+}
+
+io.on('connection', (socket) => {
+  socket.on('res:create-game', () => {
+    const code = generateCode();
+    games[code] = {
+      code, mode: 'resiliance',
+      hostSocketId: socket.id,
+      players: {}, playerIdIndex: {},
+      state: 'lobby',
+      anecdotes: {},
+      order: [],
+      round: 1,
+      roundGuesses: {},
+      currentAssignment: {},
+      guesses: {},
+      revealIndex: 0,
+      writingTimer: null,
+      roundTimer: null,
+    };
+    socket.join(code);
+    socket.data.role = 'res-host';
+    socket.data.code = code;
+    socket.emit('res:game-created', { code });
+  });
+
+  socket.on('res:join-game', ({ code, pseudo, avatar, playerId }) => {
+    code = (code || '').toUpperCase().trim();
+    const game = games[code];
+    if (!game || game.mode !== 'resiliance') return socket.emit('res:join-error', { message: 'Code introuvable. Vérifiez le code et réessayez.' });
+
+    const existingSocketId = playerId && game.playerIdIndex[playerId];
+    if (existingSocketId && game.players[existingSocketId]) {
+      const player = game.players[existingSocketId];
+      delete game.players[existingSocketId];
+      game.players[socket.id] = player;
+      game.playerIdIndex[playerId] = socket.id;
+      if (game.anecdotes[existingSocketId] !== undefined) { game.anecdotes[socket.id] = game.anecdotes[existingSocketId]; delete game.anecdotes[existingSocketId]; }
+      game.order = game.order.map((id) => (id === existingSocketId ? socket.id : id));
+      Object.keys(game.guesses).forEach((authorId) => {
+        const g = game.guesses[authorId];
+        if (g[existingSocketId] !== undefined) { g[socket.id] = g[existingSocketId]; delete g[existingSocketId]; }
+      });
+      if (game.guesses[existingSocketId]) { game.guesses[socket.id] = game.guesses[existingSocketId]; delete game.guesses[existingSocketId]; }
+      socket.join(code);
+      socket.data.role = 'res-player';
+      socket.data.code = code;
+      socket.data.playerId = playerId;
+      socket.emit('res:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
+      if (game.hostSocketId) io.to(game.hostSocketId).emit('res:player-joined', { players: resPlayersForHost(game) });
+      return;
+    }
+
+    if (game.state !== 'lobby') return socket.emit('res:join-error', { message: 'La partie a déjà commencé.' });
+
+    const cleanPseudo = (pseudo || 'Joueur').trim().slice(0, 16);
+    const pid = playerId || crypto.randomBytes(8).toString('hex');
+    game.players[socket.id] = { playerId: pid, pseudo: cleanPseudo, avatar: avatar || '/avatars/avatar1.svg' };
+    game.playerIdIndex[pid] = socket.id;
+    socket.join(code);
+    socket.data.role = 'res-player';
+    socket.data.code = code;
+    socket.data.playerId = pid;
+    socket.emit('res:joined', { code, pseudo: cleanPseudo, avatar, playerId: pid });
+    io.to(game.hostSocketId).emit('res:player-joined', { players: resPlayersForHost(game) });
+  });
+
+  socket.on('res:update-avatar', ({ avatar }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance') return;
+    const player = game.players[socket.id];
+    if (!player || !avatar) return;
+    player.avatar = avatar;
+    if (game.hostSocketId) io.to(game.hostSocketId).emit('res:player-joined', { players: resPlayersForHost(game) });
+  });
+
+  socket.on('res:host-start', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance') return;
+    if (Object.keys(game.players).length < 3) return socket.emit('res:error', { message: 'Il faut au moins 3 joueurs pour commencer.' });
+    resStartWritingPhase(game);
+  });
+
+  socket.on('res:submit-anecdote', ({ text }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance' || game.state !== 'writing') return;
+    const clean = (text || '').trim().slice(0, 200);
+    if (!clean) return;
+    game.anecdotes[socket.id] = clean;
+    const count = Object.keys(game.anecdotes).length;
+    const total = Object.keys(game.players).length;
+    io.to(game.hostSocketId).emit('res:writing-progress', { count, total });
+    socket.emit('res:anecdote-received');
+    if (count >= total) resFinishWriting(game);
+  });
+
+  socket.on('res:force-start-guessing', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'resiliance' && game.state === 'writing') resFinishWriting(game);
+  });
+
+  socket.on('res:submit-guess', ({ guessedSocketId }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance' || game.state !== 'guessing') return;
+    if (!game.currentAssignment[socket.id]) return;
+    if (game.roundGuesses[socket.id] !== undefined) return;
+    game.roundGuesses[socket.id] = guessedSocketId;
+    socket.emit('res:guess-received');
+    const answeredCount = Object.keys(game.roundGuesses).length;
+    const totalGuessers = Object.keys(game.currentAssignment).length;
+    io.to(game.hostSocketId).emit('res:round-progress', { answeredCount, totalGuessers });
+    if (answeredCount >= totalGuessers) resFinishRound(game);
+  });
+
+  socket.on('res:force-next-round', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'resiliance' && game.state === 'guessing') resFinishRound(game);
+  });
+
+  socket.on('res:start-reveal', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'resiliance' && game.state === 'reveal') resSendCurrentReveal(game);
+  });
+
+  socket.on('res:next-reveal', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance' || game.state !== 'reveal') return;
+    game.revealIndex++;
+    if (game.revealIndex >= game.order.length) io.to(game.code).emit('res:reveal-done');
+    else resSendCurrentReveal(game);
+  });
+
+  socket.on('res:new-manche', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance') return;
+    game.order = [];
+    game.round = 1;
+    game.roundGuesses = {};
+    game.currentAssignment = {};
+    game.guesses = {};
+    game.revealIndex = 0;
+    resStartWritingPhase(game);
+  });
+
+  socket.on('res:end-game', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance') return;
+    clearTimeout(game.writingTimer);
+    clearTimeout(game.roundTimer);
+    io.to(game.code).emit('res:game-ended');
+    delete games[game.code];
+  });
+
+  socket.on('disconnect', () => {
+    const code = socket.data.code;
+    if (!code || !games[code] || games[code].mode !== 'resiliance') return;
+    const game = games[code];
+    if (socket.data.role === 'res-player') {
+      io.to(game.hostSocketId).emit('res:player-joined', { players: resPlayersForHost(game) });
+    } else if (socket.data.role === 'res-host') {
+      clearTimeout(game.writingTimer);
+      clearTimeout(game.roundTimer);
+      io.to(code).emit('res:host-left');
+      delete games[code];
+    }
+  });
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Serveur lancé ! Ouvrez votre navigateur sur http://localhost:${PORT}`));

@@ -973,3 +973,70 @@ input[type=text]::placeholder { color: rgba(248,243,234,0.4); }
 .uc-result-banner.caught { color: var(--green); }
 .uc-result-banner.escaped { color: #E39C9C; }
 
+/* ---------- MODE RÉSILIANCE ---------- */
+textarea.anecdote-input {
+  width: 100%;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(248,243,234,0.2);
+  color: var(--cream);
+  font-family: 'Inter', sans-serif;
+  font-size: 1.05rem;
+  padding: 14px 16px;
+  border-radius: 12px;
+  outline: none;
+  resize: none;
+  min-height: 110px;
+  transition: border-color 0.2s ease;
+}
+textarea.anecdote-input:focus { border-color: var(--gold); }
+
+.res-anecdote-display {
+  background: rgba(198,166,100,0.1);
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  padding: 26px 22px;
+  text-align: center;
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 1.3rem;
+  color: var(--cream);
+  margin: 20px 0;
+  animation: popIn 0.4s ease both;
+}
+
+.res-guess-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 12px;
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+.res-reveal-card {
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: center;
+}
+.res-reveal-author {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.res-guess-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(198,166,100,0.15);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.res-guess-row.correct { border-color: var(--green); background: rgba(62,97,82,0.15); }
+.res-guess-row.wrong { border-color: rgba(140,59,59,0.4); }
+.res-guess-arrow { color: var(--cream-dim); }
+.res-guess-mark { margin-left: auto; font-size: 1.1rem; }
+
