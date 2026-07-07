@@ -104,6 +104,12 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
 
 // ---------- Écriture de l'anecdote ----------
 let anecdoteSent = false;
+
+socket.on('res:your-target', ({ targetPseudo, targetAvatar }) => {
+  document.getElementById('target-pseudo').textContent = targetPseudo;
+  document.getElementById('target-avatar').src = targetAvatar;
+});
+
 socket.on('res:writing-started', () => {
   anecdoteSent = false;
   document.getElementById('anecdote-text').value = '';
@@ -160,11 +166,13 @@ socket.on('res:guess-received', () => {
 });
 
 // ---------- Révélation ----------
-socket.on('res:reveal-anecdote', ({ authorPseudo, authorAvatar, text, guesses, index, total }) => {
+socket.on('res:reveal-anecdote', ({ subjectPseudo, subjectAvatar, authorPseudo, authorAvatar, text, guesses, index, total }) => {
   document.getElementById('reveal-progress').textContent = `${index + 1} / ${total}`;
-  document.getElementById('reveal-avatar').src = authorAvatar;
-  document.getElementById('reveal-pseudo').textContent = authorPseudo;
+  document.getElementById('reveal-avatar').src = subjectAvatar;
+  document.getElementById('reveal-pseudo').textContent = subjectPseudo;
   document.getElementById('reveal-text').textContent = `« ${text} »`;
+  document.getElementById('reveal-author-avatar').src = authorAvatar;
+  document.getElementById('reveal-author-pseudo').textContent = authorPseudo;
 
   const guessesEl = document.getElementById('reveal-guesses');
   guessesEl.innerHTML = '';

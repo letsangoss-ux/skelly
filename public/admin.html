@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>La Team Skelly</title>
+<title>Tableau de bord — Le Quiz des Sacs</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -132,6 +132,15 @@
             <span>Choisir une photo (facultatif)</span>
           </label>
           <button class="icon-btn qc-remove-photo hidden" type="button">✕ Retirer la photo</button>
+
+          <div class="qc-sound-preview hidden" style="margin-top:10px;">
+            <audio class="qc-sound-audio" controls style="width:140px;"></audio>
+          </div>
+          <label class="qc-upload-label" style="margin-top:10px;">
+            <input type="file" accept="audio/*" class="qc-sound-input hidden">
+            <span>🔊 Choisir un son (facultatif)</span>
+          </label>
+          <button class="icon-btn qc-remove-sound hidden" type="button">✕ Retirer le son</button>
         </div>
         <div class="qc-fields">
           <div class="field">

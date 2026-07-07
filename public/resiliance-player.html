@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>La Team Skelly</title>
+<title>Le jeu des problèmes — Joueur</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <!-- ÉCRAN 1 : rejoindre -->
   <div id="screen-join" class="screen">
     <div class="card">
-      <div class="eyebrow" style="text-align:center;display:block;">Mode Problèmes</div>
+      <div class="eyebrow" style="text-align:center;display:block;">Le jeu des problèmes</div>
       <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
       <div class="field">
         <label for="input-code">Code de la partie</label>
@@ -51,8 +51,12 @@
   <div id="screen-write" class="screen hidden">
     <div class="card">
       <div class="eyebrow" style="text-align:center;display:block;">À toi d'écrire</div>
-      <h1 class="title-xl" style="text-align:center;">Une anecdote, un mot, une phrase...</h1>
-      <p class="subtitle" style="text-align:center;">Les autres devront deviner à qui elle appartiens !</p>
+      <h1 class="title-xl" style="text-align:center;">Écris une anecdote sur...</h1>
+      <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin:16px 0;">
+        <img id="target-avatar" class="avatar-img-md" src="">
+        <span id="target-pseudo" style="font-weight:700; font-size:1.2rem;"></span>
+      </div>
+      <p class="subtitle" style="text-align:center;">Les autres devront deviner à qui appartient cette anecdote !</p>
       <div class="field">
         <textarea class="anecdote-input" id="anecdote-text" maxlength="200" placeholder="Écris ici..."></textarea>
       </div>
@@ -67,7 +71,7 @@
   <div id="screen-guess" class="screen hidden">
     <div class="lobby-wrap">
       <div class="eyebrow">Manche <span id="guess-round">1</span> / <span id="guess-total-rounds">1</span></div>
-      <h1 class="title-xl">A qui appartiens cette anecdote ?</h1>
+      <h1 class="title-xl">À qui appartient cette anecdote ?</h1>
       <div class="res-anecdote-display" id="guess-text"></div>
       <div class="res-guess-grid" id="guess-options"></div>
       <p class="subtitle hidden" id="guess-sent-msg">✅ Réponse envoyée, en attente des autres...</p>
@@ -82,8 +86,10 @@
         <div class="res-reveal-author">
           <img id="reveal-avatar" class="avatar-img-lg" src="">
           <h2 class="title-xl" id="reveal-pseudo"></h2>
+          <p class="subtitle">Anecdote à propos de cette personne</p>
         </div>
         <div class="res-anecdote-display" id="reveal-text"></div>
+        <p class="subtitle" style="text-align:center;">Écrite par <strong><img class="avatar-img-sm" id="reveal-author-avatar" src=""> <span id="reveal-author-pseudo"></span></strong></p>
         <div id="reveal-guesses"></div>
       </div>
     </div>

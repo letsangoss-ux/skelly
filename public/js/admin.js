@@ -258,6 +258,14 @@ function addQuestionCard(question) {
   if (photoUrl) { photoPreview.src = photoUrl; photoPreview.classList.remove('hidden'); removePhotoBtn.classList.remove('hidden'); }
   card.dataset.photoUrl = photoUrl;
 
+  const soundInput = card.querySelector('.qc-sound-input');
+  const soundPreviewBlock = card.querySelector('.qc-sound-preview');
+  const soundAudio = card.querySelector('.qc-sound-audio');
+  const removeSoundBtn = card.querySelector('.qc-remove-sound');
+  let soundUrl = question ? question.sound || '' : '';
+  if (soundUrl) { soundAudio.src = soundUrl; soundPreviewBlock.classList.remove('hidden'); removeSoundBtn.classList.remove('hidden'); }
+  card.dataset.soundUrl = soundUrl;
+
   const typeSelect = card.querySelector('.qc-type');
   const questionType = question && question.type === 'truefalse' ? 'truefalse' : 'classic';
   typeSelect.value = questionType;
@@ -326,6 +334,30 @@ function addQuestionCard(question) {
     removePhotoBtn.classList.add('hidden');
   });
 
+  soundInput.addEventListener('change', async () => {
+    const file = soundInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('music', file); // même champ que l'upload de musique de fond, endpoint réutilisé
+    const res = await api('/api/admin/upload-audio', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.url) {
+      soundUrl = data.url;
+      card.dataset.soundUrl = soundUrl;
+      soundAudio.src = soundUrl;
+      soundPreviewBlock.classList.remove('hidden');
+      removeSoundBtn.classList.remove('hidden');
+    }
+  });
+
+  removeSoundBtn.addEventListener('click', () => {
+    soundUrl = '';
+    card.dataset.soundUrl = '';
+    soundPreviewBlock.classList.add('hidden');
+    soundAudio.src = '';
+    removeSoundBtn.classList.add('hidden');
+  });
+
   card.querySelector('.qc-remove').addEventListener('click', () => { card.remove(); renumberQuestions(); });
   card.querySelector('.qc-move-up').addEventListener('click', () => moveCard(card, -1));
   card.querySelector('.qc-move-down').addEventListener('click', () => moveCard(card, 1));
@@ -369,6 +401,7 @@ async function saveQuiz() {
   const questions = [];
   for (const card of cards) {
     const photoUrl = card.dataset.photoUrl || null;
+    const soundUrl = card.dataset.soundUrl || null;
     const questionType = card.querySelector('.qc-type').value === 'truefalse' ? 'truefalse' : 'classic';
     const questionText = card.querySelector('.qc-question-text').value.trim();
     const indexes = questionType === 'truefalse' ? [0, 1] : [0, 1, 2, 3];
@@ -399,7 +432,7 @@ async function saveQuiz() {
     const shuffledAnswers = pairs.map((p) => p.text);
     const correctIndexes = pairs.map((p, i) => (p.correct ? i : -1)).filter((i) => i !== -1);
 
-    questions.push({ type: questionType, image: photoUrl, text: questionText || null, answers: shuffledAnswers, correctIndexes, duration, points });
+    questions.push({ type: questionType, image: photoUrl, sound: soundUrl, text: questionText || null, answers: shuffledAnswers, correctIndexes, duration, points });
   }
 
   const payload = { title, questions, music: currentMusicUrl || null, musicQuestion: currentMusicQUrl || null };

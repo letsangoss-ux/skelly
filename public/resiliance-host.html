@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>La Team Skelly</title>
+<title>Le jeu des problèmes — Animateur</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -11,9 +11,9 @@
   <!-- ÉCRAN 1 : créer la partie -->
   <div id="screen-create" class="screen">
     <div class="card" style="text-align:center;">
-      <div class="eyebrow">Mode Problèmes</div>
-      <h1 class="title-xl">Qui a dit quoi ?</h1>
-      <p class="subtitle">Chacun écrit une anecdote, puis tout le monde devine en même temps à qui elle appartiens. Il faut au moins 3 joueurs.</p>
+      <div class="eyebrow">Le jeu des problèmes</div>
+      <h1 class="title-xl">À qui appartient le problème ?</h1>
+      <p class="subtitle">Chacun écrit une anecdote sur un AUTRE joueur (jamais sur lui-même), puis tout le monde devine en même temps à qui appartient chaque anecdote. Il faut au moins 3 joueurs.</p>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-create">Créer la partie</button>
       </div>
@@ -41,7 +41,7 @@
   <div id="screen-writing" class="screen hidden">
     <div class="lobby-wrap">
       <div class="eyebrow">En ce moment</div>
-      <h1 class="title-xl">Tout le monde écrit son anecdote...</h1>
+      <h1 class="title-xl">Tout le monde écrit une anecdote sur un autre joueur...</h1>
       <p class="subtitle"><span id="writing-count">0</span> / <span id="writing-total">0</span> ont terminé</p>
       <div class="host-controls">
         <button class="btn btn-ghost" id="btn-force-guessing" style="width:auto;">Passer aux devinettes maintenant</button>
@@ -70,8 +70,10 @@
         <div class="res-reveal-author">
           <img id="reveal-avatar" class="avatar-img-lg" src="">
           <h2 class="title-xl" id="reveal-pseudo"></h2>
+          <p class="subtitle">Anecdote à propos de cette personne</p>
         </div>
         <div class="res-anecdote-display" id="reveal-text"></div>
+        <p class="subtitle" style="text-align:center;">Écrite par <strong><img class="avatar-img-sm" id="reveal-author-avatar" src=""> <span id="reveal-author-pseudo"></span></strong></p>
         <div id="reveal-guesses"></div>
       </div>
       <div class="host-controls">
@@ -84,7 +86,7 @@
   <div id="screen-end" class="screen hidden">
     <div class="card" style="text-align:center;">
       <div class="eyebrow">Terminé</div>
-      <h1 class="title-xl">C'était Résiliance !</h1>
+      <h1 class="title-xl">C'était le jeu des problèmes !</h1>
       <div class="host-controls">
         <button class="btn btn-primary" id="btn-new-manche" style="width:auto;">Nouvelle manche</button>
         <button class="btn btn-ghost" id="btn-end-game" style="width:auto;">Terminer la partie</button>

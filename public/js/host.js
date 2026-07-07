@@ -165,6 +165,16 @@ socket.on('question:show', (q) => {
     expandBtn.classList.add('hidden');
   }
 
+  const questionSound = document.getElementById('question-sound');
+  questionSound.pause();
+  if (q.sound) {
+    questionSound.src = q.sound;
+    questionSound.currentTime = 0;
+    questionSound.play().catch(() => {});
+  } else {
+    questionSound.removeAttribute('src');
+  }
+
   const wrap = document.getElementById('q-answers-host');
   wrap.innerHTML = '';
   q.answers.forEach((text, i) => {
@@ -269,6 +279,7 @@ function renderLeaderboard(container, leaderboard, withRankChange) {
 
 socket.on('question:reveal', ({ correctIndexes, stats, leaderboard }) => {
   clearInterval(timerInterval);
+  document.getElementById('question-sound').pause();
   showScreen('reveal');
 
   const total = stats.reduce((a, b) => a + b, 0) || 1;

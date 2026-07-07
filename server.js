@@ -166,7 +166,7 @@ app.get('/api/admin/export', requireAdmin, (req, res) => {
   quizzes.forEach((quiz) => {
     collectFile(quiz.music);
     collectFile(quiz.musicQuestion);
-    (quiz.questions || []).forEach((q) => collectFile(q.image));
+    (quiz.questions || []).forEach((q) => { collectFile(q.image); collectFile(q.sound); });
   });
 
   const exportData = { exportedAt: new Date().toISOString(), quizzes, files };
@@ -318,6 +318,7 @@ io.on('connection', (socket) => {
             index: game.currentQuestion, total: game.quiz.questions.length,
             text: q.text || null,
             image: q.image || null,
+            sound: q.sound || null,
             answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
             multipleAnswers: correctIndexes.length > 1,
           });
@@ -687,6 +688,7 @@ function sendQuestion(game) {
     index: game.currentQuestion, total: game.quiz.questions.length,
     text: q.text || null,
     image: q.image || null,
+    sound: q.sound || null,
     answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
     multipleAnswers: correctIndexes.length > 1,
   });
@@ -801,14 +803,19 @@ function resPlayersForHost(game) {
 }
 
 // Pour la manche game.round (1-indexée), chaque joueur à la position i de
-// game.order devine l'anecdote de l'auteur à la position (i + round) % N.
-// Cette rotation garantit : jamais sa propre anecdote, et après N-1 manches,
-// chaque joueur a deviné l'anecdote de tous les autres exactement une fois.
+// game.order devine l'anecdote du sujet à la position (i + offset) % N, avec
+// offset = round + 1. Le décalage de +1 (on saute "round=1 tout court") garantit
+// qu'on ne devine JAMAIS ni sa propre anecdote (sujet = soi), ni l'anecdote
+// qu'on a soi-même écrite (l'auteur, situé juste avant soi dans l'ordre du
+// cycle d'écriture — voir resStartWritingPhase). Après N-2 manches, chaque
+// joueur a deviné l'anecdote de tous les autres sauf la sienne et celle qu'il
+// a écrite, exactement une fois chacune.
 function resBuildRoundAssignment(game) {
   const N = game.order.length;
+  const offset = game.round + 1;
   const assignment = {};
   game.order.forEach((guesserSocketId, i) => {
-    assignment[guesserSocketId] = game.order[(i + game.round) % N];
+    assignment[guesserSocketId] = game.order[(i + offset) % N];
   });
   return assignment;
 }
@@ -817,7 +824,7 @@ function resSendRound(game) {
   clearTimeout(game.roundTimer);
   game.roundGuesses = {};
   game.currentAssignment = resBuildRoundAssignment(game);
-  const totalRounds = game.order.length - 1;
+  const totalRounds = game.order.length - 2;
 
   const optionsList = game.order
     .filter((sid) => game.players[sid])
@@ -850,7 +857,7 @@ function resFinishRound(game) {
     }
   });
 
-  const totalRounds = game.order.length - 1;
+  const totalRounds = game.order.length - 2;
   if (game.round >= totalRounds) {
     resStartReveal(game);
   } else {
@@ -865,15 +872,20 @@ function resStartReveal(game) {
   io.to(game.code).emit('res:guessing-done');
 }
 
+// Permutation "sans point fixe" : chaque écrivain se voit assigné un AUTRE joueur
+// comme sujet de son anecdote (jamais lui-même). Chaque joueur est aussi sujet
+// d'exactement une anecdote (écrite par quelqu'un d'autre).
 function resSendCurrentReveal(game) {
-  const authorSocketId = game.order[game.revealIndex];
-  const author = game.players[authorSocketId];
-  if (!author) { // l'auteur s'est déconnecté définitivement : on saute sa révélation
+  const subjectSocketId = game.order[game.revealIndex];
+  const subject = game.players[subjectSocketId];
+  if (!subject) { // le sujet s'est déconnecté définitivement : on saute sa révélation
     game.revealIndex++;
     if (game.revealIndex >= game.order.length) { io.to(game.code).emit('res:reveal-done'); return; }
     return resSendCurrentReveal(game);
   }
-  const guessesForThis = game.guesses[authorSocketId] || {};
+  const realAuthorId = game.anecdoteAuthors ? game.anecdoteAuthors[subjectSocketId] : null;
+  const realAuthor = realAuthorId ? game.players[realAuthorId] : null;
+  const guessesForThis = game.guesses[subjectSocketId] || {};
   const guessList = Object.entries(guessesForThis).map(([guesserSocketId, guessedSocketId]) => {
     const guesser = game.players[guesserSocketId];
     const guessed = game.players[guessedSocketId];
@@ -882,13 +894,15 @@ function resSendCurrentReveal(game) {
       guesserAvatar: guesser ? guesser.avatar : '/avatars/avatar1.svg',
       guessedPseudo: guessed ? guessed.pseudo : '(pas de réponse)',
       guessedAvatar: guessed ? guessed.avatar : '/avatars/avatar1.svg',
-      correct: guessedSocketId === authorSocketId,
+      correct: guessedSocketId === subjectSocketId,
     };
   });
   io.to(game.code).emit('res:reveal-anecdote', {
-    authorPseudo: author.pseudo,
-    authorAvatar: author.avatar,
-    text: game.anecdotes[authorSocketId],
+    subjectPseudo: subject.pseudo,
+    subjectAvatar: subject.avatar,
+    authorPseudo: realAuthor ? realAuthor.pseudo : '?',
+    authorAvatar: realAuthor ? realAuthor.avatar : '/avatars/avatar1.svg',
+    text: game.anecdotes[subjectSocketId],
     guesses: guessList,
     index: game.revealIndex,
     total: game.order.length,
@@ -898,13 +912,17 @@ function resSendCurrentReveal(game) {
 function resFinishWriting(game) {
   if (game.state !== 'writing') return;
   clearTimeout(game.writingTimer);
-  const authorIds = Object.keys(game.anecdotes);
-  if (authorIds.length < 3) {
+  // IMPORTANT : on ne re-mélange pas l'ordre ici. game.order a été fixé dans
+  // resStartWritingPhase et sert à la fois de cycle d'écriture (qui a écrit
+  // sur qui) et de base pour la rotation des devinettes (resBuildRoundAssignment).
+  // Les deux doivent rester alignés sur le même ordre, sinon le décalage +1 qui
+  // exclut l'auteur ne correspond plus à rien.
+  game.order = game.order.filter((id) => game.anecdotes[id] !== undefined);
+  if (game.order.length < 3) {
     io.to(game.hostSocketId).emit('res:error', { message: "Pas assez d'anecdotes reçues (3 minimum) pour continuer." });
     game.state = 'lobby';
     return;
   }
-  game.order = [...authorIds].sort(() => Math.random() - 0.5);
   game.round = 1;
   game.guesses = {};
   game.state = 'guessing';
@@ -914,6 +932,24 @@ function resFinishWriting(game) {
 function resStartWritingPhase(game) {
   game.state = 'writing';
   game.anecdotes = {};
+  game.anecdoteAuthors = {};
+
+  const playerIds = Object.keys(game.players);
+  // Un seul grand cycle mélangé : le joueur à la position i écrit sur celui à la
+  // position i+1. Ce même ordre sert ensuite de base à la rotation des devinettes
+  // (resBuildRoundAssignment), ce qui garantit qu'on ne devine jamais sa propre
+  // anecdote NI celle qu'on a soi-même écrite.
+  game.order = [...playerIds].sort(() => Math.random() - 0.5);
+  const N = game.order.length;
+  game.assignments = {}; // écrivain -> sujet (la personne sur qui il doit écrire)
+  game.order.forEach((writerId, i) => { game.assignments[writerId] = game.order[(i + 1) % N]; });
+
+  playerIds.forEach((writerId) => {
+    const subjectId = game.assignments[writerId];
+    const subject = game.players[subjectId];
+    io.to(writerId).emit('res:your-target', { targetPseudo: subject.pseudo, targetAvatar: subject.avatar });
+  });
+
   io.to(game.code).emit('res:writing-started', { duration: RES_WRITING_DURATION_MS / 1000 });
   clearTimeout(game.writingTimer);
   game.writingTimer = setTimeout(() => resFinishWriting(game), RES_WRITING_DURATION_MS + 400);
@@ -928,6 +964,8 @@ io.on('connection', (socket) => {
       players: {}, playerIdIndex: {},
       state: 'lobby',
       anecdotes: {},
+      anecdoteAuthors: {},
+      assignments: {},
       order: [],
       round: 1,
       roundGuesses: {},
@@ -955,6 +993,18 @@ io.on('connection', (socket) => {
       game.players[socket.id] = player;
       game.playerIdIndex[playerId] = socket.id;
       if (game.anecdotes[existingSocketId] !== undefined) { game.anecdotes[socket.id] = game.anecdotes[existingSocketId]; delete game.anecdotes[existingSocketId]; }
+      if (game.anecdoteAuthors) {
+        Object.keys(game.anecdoteAuthors).forEach((subjectId) => {
+          if (game.anecdoteAuthors[subjectId] === existingSocketId) game.anecdoteAuthors[subjectId] = socket.id;
+        });
+        if (game.anecdoteAuthors[existingSocketId] !== undefined) { game.anecdoteAuthors[socket.id] = game.anecdoteAuthors[existingSocketId]; delete game.anecdoteAuthors[existingSocketId]; }
+      }
+      if (game.assignments) {
+        if (game.assignments[existingSocketId] !== undefined) { game.assignments[socket.id] = game.assignments[existingSocketId]; delete game.assignments[existingSocketId]; }
+        Object.keys(game.assignments).forEach((writerId) => {
+          if (game.assignments[writerId] === existingSocketId) game.assignments[writerId] = socket.id;
+        });
+      }
       game.order = game.order.map((id) => (id === existingSocketId ? socket.id : id));
       Object.keys(game.guesses).forEach((authorId) => {
         const g = game.guesses[authorId];
@@ -1003,9 +1053,12 @@ io.on('connection', (socket) => {
   socket.on('res:submit-anecdote', ({ text }) => {
     const game = games[socket.data.code];
     if (!game || game.mode !== 'resiliance' || game.state !== 'writing') return;
+    const subjectId = game.assignments[socket.id];
+    if (!subjectId) return;
     const clean = (text || '').trim().slice(0, 200);
     if (!clean) return;
-    game.anecdotes[socket.id] = clean;
+    game.anecdotes[subjectId] = clean;
+    game.anecdoteAuthors[subjectId] = socket.id;
     const count = Object.keys(game.anecdotes).length;
     const total = Object.keys(game.players).length;
     io.to(game.hostSocketId).emit('res:writing-progress', { count, total });

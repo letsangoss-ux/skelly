@@ -94,11 +94,13 @@ socket.on('res:guessing-done', () => {
   socket.emit('res:start-reveal');
 });
 
-socket.on('res:reveal-anecdote', ({ authorPseudo, authorAvatar, text, guesses, index, total }) => {
+socket.on('res:reveal-anecdote', ({ subjectPseudo, subjectAvatar, authorPseudo, authorAvatar, text, guesses, index, total }) => {
   document.getElementById('reveal-progress').textContent = `${index + 1} / ${total}`;
-  document.getElementById('reveal-avatar').src = authorAvatar;
-  document.getElementById('reveal-pseudo').textContent = authorPseudo;
+  document.getElementById('reveal-avatar').src = subjectAvatar;
+  document.getElementById('reveal-pseudo').textContent = subjectPseudo;
   document.getElementById('reveal-text').textContent = `« ${text} »`;
+  document.getElementById('reveal-author-avatar').src = authorAvatar;
+  document.getElementById('reveal-author-pseudo').textContent = authorPseudo;
 
   const guessesEl = document.getElementById('reveal-guesses');
   guessesEl.innerHTML = '';
