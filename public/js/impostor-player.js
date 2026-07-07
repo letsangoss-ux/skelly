@@ -108,7 +108,14 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
 socket.on('uc:your-word', ({ word, isImpostor }) => {
   document.getElementById('civilian-block').classList.toggle('hidden', isImpostor);
   document.getElementById('impostor-block').classList.toggle('hidden', !isImpostor);
-  if (!isImpostor) document.getElementById('your-word-text').textContent = word;
+  if (!isImpostor) {
+    document.getElementById('your-word-text').textContent = word;
+  } else {
+    const hasWord = !!word;
+    document.getElementById('impostor-word-block').classList.toggle('hidden', !hasWord);
+    document.getElementById('impostor-no-word-text').classList.toggle('hidden', hasWord);
+    if (hasWord) document.getElementById('impostor-word-text').textContent = word;
+  }
   showScreen('yourWord');
 });
 
@@ -162,7 +169,7 @@ socket.on('uc:reveal', ({ players, word, mostVotedSocketId, impostorCaught }) =>
     card.innerHTML = `
       <img src="${p.avatar}" alt="${p.pseudo}">
       <span class="uc-name">${p.pseudo}</span>
-      <span class="uc-word">${p.isImpostor ? '🎭 Imposteur' : p.word}</span>
+      <span class="uc-word">${p.isImpostor ? ('🎭 Imposteur' + (p.word ? ` (${p.word})` : '')) : p.word}</span>
       ${p.votes ? `<span class="uc-vote-count">${p.votes} vote${p.votes > 1 ? 's' : ''}</span>` : ''}
     `;
     container.appendChild(card);

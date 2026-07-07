@@ -32,6 +32,7 @@
           <input type="file" id="import-file-input" accept="application/json,.json" class="hidden">
           <button class="btn btn-ghost" id="btn-show-global" style="width:auto;">Classement général</button>
           <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
+          <button class="btn btn-ghost" id="btn-show-uc-words" style="width:auto;">🎭 Mots Imposteur</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
@@ -62,6 +63,50 @@
       <div id="global-list"></div>
     </div>
   </div>
+
+  <!-- ÉCRAN : mots du mode Imposteur -->
+  <div id="screen-uc-words" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Mode Imposteur</div><h1 class="title-xl">Paires de mots</h1></div>
+        <button class="btn btn-ghost" id="btn-back-dashboard-3" style="width:auto;">← Retour</button>
+      </div>
+      <div class="info-banner" style="text-align:left;">🎭 À chaque manche, tous les joueurs reçoivent le <strong>mot civil</strong>, sauf l'imposteur qui reçoit le <strong>mot imposteur</strong> — un mot proche mais différent (ex : « Chat » / « Chien »), pour brouiller les pistes. Si le mot imposteur est laissé vide, l'imposteur n'aura aucun mot (mode classique).</div>
+
+      <div class="field-row" style="display:flex; gap:14px; margin-top:20px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field" style="flex:1; min-width:200px;">
+          <label for="uc-new-civil">Mot civil</label>
+          <input type="text" id="uc-new-civil" placeholder="Ex : Chat">
+        </div>
+        <div class="field" style="flex:1; min-width:200px;">
+          <label for="uc-new-impostor">Mot imposteur (proche, optionnel)</label>
+          <input type="text" id="uc-new-impostor" placeholder="Ex : Chien">
+        </div>
+        <button class="btn btn-primary" id="btn-uc-add" style="width:auto;">+ Ajouter</button>
+      </div>
+      <div class="error-msg" id="uc-words-error"></div>
+
+      <div id="uc-words-list" style="margin-top:24px;"></div>
+    </div>
+  </div>
+
+  <!-- Modèle d'une ligne paire de mots imposteur -->
+  <template id="uc-word-row-template">
+    <div class="question-card uc-word-row">
+      <div class="qc-body" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="field" style="flex:1; min-width:200px;">
+          <label>Mot civil</label>
+          <input type="text" class="uc-row-civil">
+        </div>
+        <div class="field" style="flex:1; min-width:200px;">
+          <label>Mot imposteur</label>
+          <input type="text" class="uc-row-impostor" placeholder="(vide = aucun mot)">
+        </div>
+        <button class="icon-btn uc-row-save" title="Enregistrer">💾</button>
+        <button class="icon-btn uc-row-remove" title="Supprimer">✕</button>
+      </div>
+    </div>
+  </template>
 
   <!-- ÉCRAN : éditeur de quiz -->
   <div id="screen-editor" class="screen hidden">

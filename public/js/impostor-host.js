@@ -101,7 +101,7 @@ socket.on('uc:reveal', ({ players, word, mostVotedSocketId, impostorCaught }) =>
     card.innerHTML = `
       <img src="${p.avatar}" alt="${p.pseudo}">
       <span class="uc-name">${p.pseudo}</span>
-      <span class="uc-word">${p.isImpostor ? '🎭 Imposteur' : p.word}</span>
+      <span class="uc-word">${p.isImpostor ? ('🎭 Imposteur' + (p.word ? ` (${p.word})` : '')) : p.word}</span>
       ${p.votes ? `<span class="uc-vote-count">${p.votes} vote${p.votes > 1 ? 's' : ''}</span>` : ''}
     `;
     container.appendChild(card);

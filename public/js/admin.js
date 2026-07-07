@@ -9,6 +9,7 @@ const screens = {
   history: document.getElementById('screen-history'),
   global: document.getElementById('screen-global'),
   editor: document.getElementById('screen-editor'),
+  ucWords: document.getElementById('screen-uc-words'),
 };
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
@@ -184,6 +185,70 @@ document.getElementById('btn-show-global').addEventListener('click', async () =>
   showScreen('global');
 });
 document.getElementById('btn-back-dashboard-2').addEventListener('click', loadDashboard);
+
+// ---------- Mots du mode Imposteur ----------
+document.getElementById('btn-show-uc-words').addEventListener('click', loadUcWords);
+document.getElementById('btn-back-dashboard-3').addEventListener('click', loadDashboard);
+
+async function loadUcWords() {
+  document.getElementById('uc-words-error').textContent = '';
+  const res = await api('/api/admin/undercover-words');
+  const pairs = await res.json();
+  const list = document.getElementById('uc-words-list');
+  list.innerHTML = '';
+  if (pairs.length === 0) list.innerHTML = '<p class="subtitle">Aucune paire de mots pour le moment. Ajoutez-en une ci-dessus.</p>';
+  const template = document.getElementById('uc-word-row-template');
+  pairs.forEach((pair) => {
+    const node = template.content.cloneNode(true);
+    const row = node.querySelector('.uc-word-row');
+    const civilInput = node.querySelector('.uc-row-civil');
+    const impostorInput = node.querySelector('.uc-row-impostor');
+    civilInput.value = pair.civil;
+    impostorInput.value = pair.impostor || '';
+    node.querySelector('.uc-row-save').addEventListener('click', () => saveUcWord(pair.id, civilInput.value, impostorInput.value));
+    node.querySelector('.uc-row-remove').addEventListener('click', () => deleteUcWord(pair.id, pair.civil));
+    list.appendChild(node);
+  });
+  showScreen('ucWords');
+}
+
+document.getElementById('btn-uc-add').addEventListener('click', async () => {
+  const civilInput = document.getElementById('uc-new-civil');
+  const impostorInput = document.getElementById('uc-new-impostor');
+  const errorEl = document.getElementById('uc-words-error');
+  errorEl.textContent = '';
+  const civil = civilInput.value.trim();
+  if (!civil) { errorEl.textContent = 'Merci de saisir un mot civil.'; return; }
+  try {
+    await api('/api/admin/undercover-words', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ civil, impostor: impostorInput.value.trim() }),
+    });
+    civilInput.value = '';
+    impostorInput.value = '';
+    loadUcWords();
+  } catch (e) { errorEl.textContent = 'Impossible d\'ajouter cette paire.'; }
+});
+
+async function saveUcWord(id, civil, impostor) {
+  const errorEl = document.getElementById('uc-words-error');
+  errorEl.textContent = '';
+  if (!civil.trim()) { errorEl.textContent = 'Le mot civil est obligatoire.'; return; }
+  try {
+    await api(`/api/admin/undercover-words/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ civil: civil.trim(), impostor: impostor.trim() }),
+    });
+  } catch (e) { errorEl.textContent = 'Impossible d\'enregistrer cette paire.'; }
+}
+
+async function deleteUcWord(id, civil) {
+  if (!confirm(`Supprimer la paire « ${civil} » ?`)) return;
+  await api(`/api/admin/undercover-words/${id}`, { method: 'DELETE' });
+  loadUcWords();
+}
 
 // ---------- Éditeur de quiz ----------
 document.getElementById('btn-cancel-edit').addEventListener('click', loadDashboard);

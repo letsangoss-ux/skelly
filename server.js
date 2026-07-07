@@ -129,6 +129,39 @@ app.post('/api/admin/quizzes/:id/duplicate', requireAdmin, (req, res) => {
   res.json(copy);
 });
 
+// ------------------------------------------------------------
+// Gestion des mots du mode Imposteur (paires civil / imposteur)
+// ------------------------------------------------------------
+app.get('/api/admin/undercover-words', requireAdmin, (req, res) => res.json(loadUndercoverWords()));
+
+app.post('/api/admin/undercover-words', requireAdmin, (req, res) => {
+  const pairs = loadUndercoverWords();
+  const civil = (req.body.civil || '').trim();
+  const impostor = (req.body.impostor || '').trim();
+  if (!civil) return res.status(400).json({ error: 'Le mot civil est obligatoire.' });
+  const pair = { id: 'w_' + Date.now() + '_' + Math.round(Math.random() * 1e4), civil, impostor };
+  pairs.push(pair);
+  saveUndercoverWords(pairs);
+  res.json(pair);
+});
+
+app.put('/api/admin/undercover-words/:id', requireAdmin, (req, res) => {
+  const pairs = loadUndercoverWords();
+  const idx = pairs.findIndex((p) => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Paire introuvable.' });
+  const civil = (req.body.civil || '').trim();
+  const impostor = (req.body.impostor || '').trim();
+  if (!civil) return res.status(400).json({ error: 'Le mot civil est obligatoire.' });
+  pairs[idx] = { id: req.params.id, civil, impostor };
+  saveUndercoverWords(pairs);
+  res.json(pairs[idx]);
+});
+
+app.delete('/api/admin/undercover-words/:id', requireAdmin, (req, res) => {
+  saveUndercoverWords(loadUndercoverWords().filter((p) => p.id !== req.params.id));
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/history', requireAdmin, (req, res) => res.json(loadHistory()));
 
 app.get('/api/admin/global-leaderboard', requireAdmin, (req, res) => {
@@ -459,14 +492,25 @@ io.on('connection', (socket) => {
 
 // ============================================================
 // MODE "IMPOSTEUR" (Undercover) — jeu indépendant du quiz.
-// Tous les joueurs reçoivent le même mot secret, sauf un seul
-// "imposteur" qui ne reçoit aucun mot et doit bluffer.
+// Tous les joueurs reçoivent le même mot secret ("civil"), sauf un seul
+// "imposteur" qui reçoit un mot proche mais différent (défini en admin,
+// dans la même paire) — ou aucun mot si ce mot proche n'a pas été défini.
 // ============================================================
 const UNDERCOVER_WORDS_FILE = path.join(__dirname, 'data', 'undercover-words.json');
+// Chaque entrée est une paire { id, civil, impostor } : les civils reçoivent "civil",
+// l'imposteur reçoit "impostor" (un mot proche mais différent) pour brouiller les pistes.
+// Rétro-compatibilité : si une ancienne liste de simples chaînes est détectée, on la convertit.
 function loadUndercoverWords() {
   if (!fs.existsSync(UNDERCOVER_WORDS_FILE)) fs.writeFileSync(UNDERCOVER_WORDS_FILE, '[]');
-  return JSON.parse(fs.readFileSync(UNDERCOVER_WORDS_FILE, 'utf-8'));
+  const raw = JSON.parse(fs.readFileSync(UNDERCOVER_WORDS_FILE, 'utf-8'));
+  if (raw.length && typeof raw[0] === 'string') {
+    const migrated = raw.map((w, i) => ({ id: 'w_' + Date.now() + '_' + i, civil: w, impostor: '' }));
+    saveUndercoverWords(migrated);
+    return migrated;
+  }
+  return raw;
 }
+function saveUndercoverWords(pairs) { fs.writeFileSync(UNDERCOVER_WORDS_FILE, JSON.stringify(pairs, null, 2)); }
 
 function ucPlayersForHost(game) {
   return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
@@ -493,6 +537,7 @@ io.on('connection', (socket) => {
       currentTurnIndex: 0,
       round: 1,
       word: null,
+      impostorWord: null,
       impostorSocketId: null,
       votes: {},
     };
@@ -549,8 +594,11 @@ io.on('connection', (socket) => {
 
   function ucStartManche(game) {
     const playerIds = Object.keys(game.players);
-    const words = loadUndercoverWords();
-    game.word = words.length ? words[Math.floor(Math.random() * words.length)] : 'Mot mystère';
+    const pairs = loadUndercoverWords();
+    const pair = pairs.length ? pairs[Math.floor(Math.random() * pairs.length)] : { civil: 'Mot mystère', impostor: '' };
+    game.word = pair.civil;
+    // Si aucun mot proche n'a été défini pour cette paire, l'imposteur reste sans mot (comportement classique).
+    game.impostorWord = (pair.impostor || '').trim() || null;
     game.impostorSocketId = playerIds[Math.floor(Math.random() * playerIds.length)];
     // Ordre de passage mélangé à chaque manche
     game.order = [...playerIds].sort(() => Math.random() - 0.5);
@@ -563,7 +611,7 @@ io.on('connection', (socket) => {
 
     playerIds.forEach((socketId) => {
       const isImpostor = socketId === game.impostorSocketId;
-      io.to(socketId).emit('uc:your-word', { word: isImpostor ? null : game.word, isImpostor });
+      io.to(socketId).emit('uc:your-word', { word: isImpostor ? game.impostorWord : game.word, isImpostor });
     });
 
     io.to(game.code).emit('uc:turn-changed', { socketId: game.order[0], round: game.round });
@@ -621,16 +669,20 @@ io.on('connection', (socket) => {
       if (count > maxVotes) { maxVotes = count; mostVotedSocketId = socketId; }
     });
 
-    const players = Object.entries(game.players).map(([socketId, p]) => ({
-      socketId, pseudo: p.pseudo, avatar: p.avatar,
-      word: socketId === game.impostorSocketId ? null : game.word,
-      isImpostor: socketId === game.impostorSocketId,
-      votes: tally[socketId] || 0,
-    }));
+    const players = Object.entries(game.players).map(([socketId, p]) => {
+      const isImpostor = socketId === game.impostorSocketId;
+      return {
+        socketId, pseudo: p.pseudo, avatar: p.avatar,
+        word: isImpostor ? game.impostorWord : game.word,
+        isImpostor,
+        votes: tally[socketId] || 0,
+      };
+    });
 
     io.to(game.code).emit('uc:reveal', {
       players,
       word: game.word,
+      impostorWord: game.impostorWord,
       impostorSocketId: game.impostorSocketId,
       mostVotedSocketId,
       impostorCaught: mostVotedSocketId === game.impostorSocketId,

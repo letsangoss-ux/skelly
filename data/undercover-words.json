@@ -1,4 +1,22 @@
 [
-  "TastyCrousty", "Infirmier", "TikTok", "Estelle", "Hugo", "Tana", "67", "TikTok Univers", "Magali Berdah", "BBL",
-  "Vice", "Bijoux de la couronne", "Team Nasdas", "Discord", "Ariana Grande", "Booba", "Sarah Fraisou", "Dubaï", "JLC Family", "Eva Queen"
+  { "id": "w_0001", "civil": "TastyCrousty", "impostor": "RNBOI" },
+  { "id": "w_0002", "civil": "Infirmier", "impostor": "CHU" },
+  { "id": "w_0003", "civil": "TikTok", "impostor": "Instagram" },
+  { "id": "w_0004", "civil": "Estelle", "impostor": "MyriamK" },
+  { "id": "w_0005", "civil": "Hugo", "impostor": "Andréane" },
+  { "id": "w_0006", "civil": "Tana", "impostor": "Prostituée" },
+  { "id": "w_0007", "civil": "67", "impostor": "RNBOI" },
+  { "id": "w_0008", "civil": "TikTok Univers", "impostor": "Galaxie" },
+  { "id": "w_0009", "civil": "Magali Berdah", "impostor": "Enchères" },
+  { "id": "w_0010", "civil": "BBL", "impostor": "Chirurgie" },
+  { "id": "w_0011", "civil": "Vice", "impostor": "Tourne visse" },
+  { "id": "w_0012", "civil": "Bijoux de la couronne", "impostor": "Chalençon" },
+  { "id": "w_0013", "civil": "Team Nasdas", "impostor": "Morgane (nasdas)" },
+  { "id": "w_0014", "civil": "Discord", "impostor": "Alan's Kingdom" },
+  { "id": "w_0015", "civil": "Ariana Grande", "impostor": "Glinda" },
+  { "id": "w_0016", "civil": "Booba", "impostor": "Procès" },
+  { "id": "w_0017", "civil": "Sarah Fraisou", "impostor": "Maeva Ghenam" },
+  { "id": "w_0018", "civil": "Dubaï", "impostor": "Emirats Arabe Unis" },
+  { "id": "w_0019", "civil": "JLC Family", "impostor": "Eva Queen" },
+  { "id": "w_0020", "civil": "Eva Queen", "impostor": "Jazz" }
 ]
