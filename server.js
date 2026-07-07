@@ -422,14 +422,15 @@ io.on('connection', (socket) => {
     io.to(game.hostSocketId).emit('host:player-joined', { players: playersForHost(game) });
   });
 
-  socket.on('player:submit-answer', ({ answerIndex }) => {
+  socket.on('player:submit-answer', ({ answerIndexes }) => {
     const game = games[socket.data.code];
     if (!game || game.state !== 'playing' || game.paused || !game.answeringOpen) return;
     const qIndex = game.currentQuestion;
     if (!game.answers[qIndex]) game.answers[qIndex] = {};
     if (game.answers[qIndex][socket.id]) return;
     const timeMs = Date.now() - game.questionStartedAt;
-    game.answers[qIndex][socket.id] = { answerIndex, timeMs };
+    const indexes = Array.isArray(answerIndexes) ? answerIndexes.filter((n) => Number.isInteger(n)) : [];
+    game.answers[qIndex][socket.id] = { answerIndexes: indexes, timeMs };
     const answeredCount = Object.keys(game.answers[qIndex]).length;
     const totalPlayers = Object.keys(game.players).length;
     io.to(game.hostSocketId).emit('host:player-answered', { answeredCount, totalPlayers });
@@ -716,10 +717,13 @@ function revealAnswer(game) {
   const stats = q.answers.map(() => 0);
 
   Object.entries(answersGiven).forEach(([socketId, ans]) => {
-    stats[ans.answerIndex] = (stats[ans.answerIndex] || 0) + 1;
+    (ans.answerIndexes || []).forEach((idx) => { stats[idx] = (stats[idx] || 0) + 1; });
     const player = game.players[socketId];
     if (!player) return;
-    const isCorrect = correctIndexes.includes(ans.answerIndex);
+    const given = new Set(ans.answerIndexes || []);
+    const correctSet = new Set(correctIndexes);
+    const isCorrect = given.size > 0 && given.size === correctSet.size && [...given].every((i) => correctSet.has(i));
+    ans.isCorrect = isCorrect;
     if (isCorrect) {
       const durationMs = (q.duration || 20) * 1000;
       const speedFactor = Math.max(0, 1 - ans.timeMs / durationMs);
@@ -759,7 +763,7 @@ function revealAnswer(game) {
   Object.entries(game.players).forEach(([socketId, player]) => {
     const givenAnswer = answersGiven[socketId];
     io.to(socketId).emit('player:result', {
-      correct: !!(givenAnswer && correctIndexes.includes(givenAnswer.answerIndex)),
+      correct: !!(givenAnswer && givenAnswer.isCorrect),
       points: player.lastPoints || 0,
       totalScore: player.score,
       streak: player.streak,

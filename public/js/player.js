@@ -166,6 +166,7 @@ document.querySelectorAll('.reaction-btn').forEach((btn) => {
 // ---------- Question ----------
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
 let paused = false;
+let selectedAnswers = new Set();
 
 let pendingQuestion = null;
 
@@ -174,6 +175,7 @@ let pendingQuestion = null;
 socket.on('question:show', (q) => {
   answered = false;
   paused = false;
+  selectedAnswers = new Set();
   pendingQuestion = q;
   showScreen('play');
   document.getElementById('p-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
@@ -194,20 +196,47 @@ socket.on('question:show', (q) => {
     const btn = document.createElement('button');
     btn.className = `answer-btn ${answerColors[i]}`;
     btn.innerHTML = `<span class="answer-shape"></span> ${text}`;
-    btn.addEventListener('click', () => submitAnswer(i, wrap));
+    if (q.multipleAnswers) btn.addEventListener('click', () => toggleAnswer(i, btn));
+    else btn.addEventListener('click', () => submitAnswer([i]));
     wrap.appendChild(btn);
   });
+
+  const validateRow = document.getElementById('p-validate-row');
+  const validateBtn = document.getElementById('btn-validate-answers');
+  if (q.multipleAnswers) {
+    validateRow.classList.remove('hidden');
+    validateBtn.disabled = true;
+  } else {
+    validateRow.classList.add('hidden');
+  }
 
   startTimer(q.duration);
 });
 
+document.getElementById('btn-validate-answers').addEventListener('click', () => {
+  if (answered || paused || selectedAnswers.size === 0) return;
+  submitAnswer(Array.from(selectedAnswers));
+});
+
+function toggleAnswer(index, btn) {
+  if (answered || paused) return;
+  if (selectedAnswers.has(index)) {
+    selectedAnswers.delete(index);
+    btn.classList.remove('chosen');
+  } else {
+    selectedAnswers.add(index);
+    btn.classList.add('chosen');
+  }
+  document.getElementById('btn-validate-answers').disabled = selectedAnswers.size === 0;
+}
+
 socket.on('game:paused', () => { paused = true; clearInterval(timerInterval); });
 socket.on('game:resumed', () => { paused = false; resumeTimerVisual(); });
 
-function submitAnswer(index, wrap) {
+function submitAnswer(indexes) {
   if (answered || paused) return;
   answered = true;
-  socket.emit('player:submit-answer', { answerIndex: index });
+  socket.emit('player:submit-answer', { answerIndexes: indexes });
   clearInterval(timerInterval);
   showScreen('answered');
 }
@@ -239,7 +268,10 @@ function tick() {
   if (currentRemaining <= 5 && currentRemaining > 0) beep();
   if (currentRemaining <= 0) {
     clearInterval(timerInterval);
-    if (!answered) document.querySelectorAll('#p-answers .answer-btn').forEach((b) => (b.disabled = true));
+    if (!answered) {
+      document.querySelectorAll('#p-answers .answer-btn').forEach((b) => (b.disabled = true));
+      document.getElementById('btn-validate-answers').disabled = true;
+    }
     return;
   }
   currentRemaining -= 1;
