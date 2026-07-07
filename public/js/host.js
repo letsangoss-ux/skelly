@@ -162,15 +162,18 @@ document.getElementById('btn-start').addEventListener('click', () => socket.emit
 // ---------- Afficher une question ----------
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
 let currentAnswersText = [];
+let currentQuestionSound = null;
 
 let pendingDuration = 20;
 
-// La question (texte/photo/son) et les réponses s'affichent immédiatement,
-// chrono compris.
+// La question (texte/photo) et les réponses s'affichent immédiatement, chrono
+// compris. Le son associé, lui, ne sera jouable qu'après la révélation (pour
+// appuyer la révélation de la réponse), voir le handler 'question:reveal'.
 socket.on('question:show', (q) => {
   showScreen('question');
   currentQuestionIndex = q.index;
   currentAnswersText = q.answers;
+  currentQuestionSound = q.sound || null;
   pendingDuration = q.duration;
   document.getElementById('q-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('q-text').textContent = q.text || '';
@@ -192,21 +195,7 @@ socket.on('question:show', (q) => {
 
   const questionSound = document.getElementById('question-sound');
   questionSound.pause();
-  const soundControl = document.getElementById('question-sound-control');
-  const soundBtn = document.getElementById('btn-toggle-question-sound');
-  if (q.sound) {
-    questionSound.src = q.sound;
-    questionSound.currentTime = 0;
-    questionSound.volume = questionSoundVolumeSlider.value / 100;
-    soundControl.classList.remove('hidden');
-    soundBtn.textContent = '⏸️';
-    // Tentative de lecture auto ; si le navigateur bloque l'autoplay, l'animateur
-    // peut cliquer sur le bouton pour lancer le son manuellement.
-    questionSound.play().catch(() => { soundBtn.textContent = '▶️'; });
-  } else {
-    questionSound.removeAttribute('src');
-    soundControl.classList.add('hidden');
-  }
+  questionSound.removeAttribute('src');
 
   const wrap = document.getElementById('q-answers-host');
   wrap.innerHTML = '';
@@ -224,7 +213,7 @@ socket.on('question:show', (q) => {
   startTimer(q.duration);
 });
 
-// ---------- Contrôleur de son (question) ----------
+// ---------- Contrôleur de son (question), disponible sur l'écran de révélation ----------
 const questionSoundVolumeSlider = document.getElementById('question-sound-volume');
 document.getElementById('btn-toggle-question-sound').addEventListener('click', () => {
   const questionSound = document.getElementById('question-sound');
@@ -313,9 +302,22 @@ function renderLeaderboard(container, leaderboard, withRankChange) {
 
 socket.on('question:reveal', ({ correctIndexes, stats, leaderboard }) => {
   clearInterval(timerInterval);
-  document.getElementById('question-sound').pause();
-  document.getElementById('question-sound-control').classList.add('hidden');
   showScreen('reveal');
+
+  const questionSound = document.getElementById('question-sound');
+  const soundControl = document.getElementById('question-sound-control');
+  const soundBtn = document.getElementById('btn-toggle-question-sound');
+  questionSound.pause();
+  if (currentQuestionSound) {
+    questionSound.src = currentQuestionSound;
+    questionSound.currentTime = 0;
+    questionSound.volume = questionSoundVolumeSlider.value / 100;
+    soundControl.classList.remove('hidden');
+    soundBtn.textContent = '▶️';
+  } else {
+    questionSound.removeAttribute('src');
+    soundControl.classList.add('hidden');
+  }
 
   const total = stats.reduce((a, b) => a + b, 0) || 1;
   const bars = document.getElementById('stats-bars');

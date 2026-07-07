@@ -53,12 +53,8 @@
       <div id="q-multi-banner" class="info-banner hidden">🔢 Cette question peut avoir plusieurs bonnes réponses</div>
       <h2 id="q-text" class="title-xl" style="text-align:center; margin-bottom:14px; font-size:1.5rem;"></h2>
       <div id="q-photo-frame" class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
-      <div style="text-align:center; margin-bottom:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <div style="text-align:center; margin-bottom:14px;">
         <button class="btn-expand" id="btn-expand-photo">⛶ Plein écran</button>
-        <div class="sound-control hidden" id="question-sound-control">
-          <button class="sound-control-btn" id="btn-toggle-question-sound">▶️</button>
-          <input type="range" id="question-sound-volume" min="0" max="100" value="80" title="Volume du son de la question">
-        </div>
       </div>
       <div class="answers-grid" id="q-answers-host"></div>
       <div class="waiting-msg" id="waiting-msg-answers"><span id="answered-count">0</span> / <span id="total-players">0</span> ont répondu</div>
@@ -73,6 +69,10 @@
     <div class="question-wrap" style="text-align:center;">
       <span class="tag-pill">Réponse révélée</span>
       <h2 id="reveal-answer-text" style="margin-bottom:20px;"></h2>
+      <div class="sound-control hidden" id="question-sound-control" style="margin:0 auto 20px; justify-content:center;">
+        <button class="sound-control-btn" id="btn-toggle-question-sound">▶️</button>
+        <input type="range" id="question-sound-volume" min="0" max="100" value="80" title="Volume du son de la question">
+      </div>
       <div class="stats-bars" id="stats-bars"></div>
       <h3 style="margin-top:34px;margin-bottom:14px;">Classement</h3>
       <div class="leaderboard" id="reveal-leaderboard" style="margin:0 auto;"></div>
