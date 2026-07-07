@@ -55,13 +55,15 @@
       <div id="q-photo-frame" class="bag-photo-frame"><img id="q-image" src="" alt="Photo du sac"></div>
       <div style="text-align:center; margin-bottom:14px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button class="btn-expand" id="btn-expand-photo">⛶ Plein écran</button>
-        <button class="btn-expand" id="btn-toggle-pause">⏸ Pause</button>
+        <div class="sound-control hidden" id="question-sound-control">
+          <button class="sound-control-btn" id="btn-toggle-question-sound">▶️</button>
+          <input type="range" id="question-sound-volume" min="0" max="100" value="80" title="Volume du son de la question">
+        </div>
       </div>
       <div class="answers-grid" id="q-answers-host"></div>
       <div class="waiting-msg" id="waiting-msg-answers"><span id="answered-count">0</span> / <span id="total-players">0</span> ont répondu</div>
       <div class="host-controls">
-        <button class="btn btn-primary" id="btn-open-answering" style="width:auto;">🚀 Ouvrir les réponses</button>
-        <button class="btn btn-primary hidden" id="btn-reveal" style="width:auto;">Révéler la réponse</button>
+        <button class="btn btn-primary" id="btn-reveal" style="width:auto;">Révéler la réponse</button>
       </div>
     </div>
   </div>

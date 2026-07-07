@@ -169,10 +169,9 @@ let paused = false;
 
 let pendingQuestion = null;
 
-// Étape 1 : aperçu — la question, la photo et le son éventuels s'affichent,
-// mais on ne peut pas encore répondre : pas de chrono, boutons masqués. On
-// attend que l'animateur ouvre les réponses (comme sur Kahoot).
-socket.on('question:preview', (q) => {
+// La question (texte, photo et son éventuels) et les réponses s'affichent
+// immédiatement, chrono compris.
+socket.on('question:show', (q) => {
   answered = false;
   paused = false;
   pendingQuestion = q;
@@ -188,22 +187,10 @@ socket.on('question:preview', (q) => {
   if (q.image) { document.getElementById('p-image').src = q.image; photoFrame.classList.remove('hidden'); }
   else photoFrame.classList.add('hidden');
 
-  clearInterval(timerInterval);
-  document.getElementById('p-timer-num').textContent = q.duration;
-  document.getElementById('p-answers').innerHTML = '';
-  document.getElementById('p-answers').classList.add('hidden');
-  document.getElementById('p-waiting-host').classList.remove('hidden');
-});
-
-// Étape 2 : l'animateur a ouvert les réponses — le chrono démarre et les
-// boutons de réponse apparaissent.
-socket.on('question:answers-open', ({ duration }) => {
-  if (!pendingQuestion) return;
-  document.getElementById('p-waiting-host').classList.add('hidden');
   const wrap = document.getElementById('p-answers');
   wrap.innerHTML = '';
   wrap.classList.remove('hidden');
-  pendingQuestion.answers.forEach((text, i) => {
+  q.answers.forEach((text, i) => {
     const btn = document.createElement('button');
     btn.className = `answer-btn ${answerColors[i]}`;
     btn.innerHTML = `<span class="answer-shape"></span> ${text}`;
@@ -211,7 +198,7 @@ socket.on('question:answers-open', ({ duration }) => {
     wrap.appendChild(btn);
   });
 
-  startTimer(duration);
+  startTimer(q.duration);
 });
 
 socket.on('game:paused', () => { paused = true; clearInterval(timerInterval); });

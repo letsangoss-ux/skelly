@@ -5,7 +5,6 @@ let gameCode = null;
 let timerInterval = null;
 let currentQuestionIndex = 0;
 let musicMuted = false;
-let isPaused = false;
 let currentPlayersMap = {}; // socketId -> player (pour le bouton "exclure")
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -166,13 +165,10 @@ let currentAnswersText = [];
 
 let pendingDuration = 20;
 
-// Étape 1 : aperçu de la question (texte/photo/son), pas de chrono, réponses pas
-// cliquables — l'animateur laisse le temps à tout le monde de prendre connaissance
-// des éléments, puis clique sur "Ouvrir les réponses" quand il est prêt.
-socket.on('question:preview', (q) => {
+// La question (texte/photo/son) et les réponses s'affichent immédiatement,
+// chrono compris.
+socket.on('question:show', (q) => {
   showScreen('question');
-  isPaused = false;
-  document.getElementById('btn-toggle-pause').textContent = '⏸ Pause';
   currentQuestionIndex = q.index;
   currentAnswersText = q.answers;
   pendingDuration = q.duration;
@@ -196,12 +192,20 @@ socket.on('question:preview', (q) => {
 
   const questionSound = document.getElementById('question-sound');
   questionSound.pause();
+  const soundControl = document.getElementById('question-sound-control');
+  const soundBtn = document.getElementById('btn-toggle-question-sound');
   if (q.sound) {
     questionSound.src = q.sound;
     questionSound.currentTime = 0;
-    questionSound.play().catch(() => {});
+    questionSound.volume = questionSoundVolumeSlider.value / 100;
+    soundControl.classList.remove('hidden');
+    soundBtn.textContent = '⏸️';
+    // Tentative de lecture auto ; si le navigateur bloque l'autoplay, l'animateur
+    // peut cliquer sur le bouton pour lancer le son manuellement.
+    questionSound.play().catch(() => { soundBtn.textContent = '▶️'; });
   } else {
     questionSound.removeAttribute('src');
+    soundControl.classList.add('hidden');
   }
 
   const wrap = document.getElementById('q-answers-host');
@@ -215,31 +219,28 @@ socket.on('question:preview', (q) => {
 
   playQuestionMusic();
 
-  // Écran d'aperçu : chrono figé à la durée totale, bouton "Ouvrir les réponses"
-  // visible, bouton "Révéler" et pause masqués (pas de chrono en cours à interrompre).
-  clearInterval(timerInterval);
-  const circle = document.getElementById('timer-circle');
-  document.getElementById('timer-num').textContent = q.duration;
-  circle.style.strokeDasharray = 2 * Math.PI * 27;
-  circle.style.strokeDashoffset = 0;
-  document.getElementById('btn-open-answering').classList.remove('hidden');
-  document.getElementById('btn-reveal').classList.add('hidden');
-  document.getElementById('btn-toggle-pause').classList.add('hidden');
-  document.getElementById('waiting-msg-answers').classList.add('hidden');
-});
-
-document.getElementById('btn-open-answering').addEventListener('click', () => {
-  socket.emit('host:open-answering');
-});
-
-// Étape 2 : l'animateur a cliqué "Ouvrir les réponses" — le chrono démarre
-// vraiment maintenant et les joueurs peuvent répondre.
-socket.on('question:answers-open', ({ duration }) => {
-  document.getElementById('btn-open-answering').classList.add('hidden');
   document.getElementById('btn-reveal').classList.remove('hidden');
-  document.getElementById('btn-toggle-pause').classList.remove('hidden');
   document.getElementById('waiting-msg-answers').classList.remove('hidden');
-  startTimer(duration);
+  startTimer(q.duration);
+});
+
+// ---------- Contrôleur de son (question) ----------
+const questionSoundVolumeSlider = document.getElementById('question-sound-volume');
+document.getElementById('btn-toggle-question-sound').addEventListener('click', () => {
+  const questionSound = document.getElementById('question-sound');
+  const soundBtn = document.getElementById('btn-toggle-question-sound');
+  if (questionSound.paused) {
+    questionSound.play().then(() => { soundBtn.textContent = '⏸️'; }).catch(() => {});
+  } else {
+    questionSound.pause();
+    soundBtn.textContent = '▶️';
+  }
+});
+questionSoundVolumeSlider.addEventListener('input', () => {
+  document.getElementById('question-sound').volume = questionSoundVolumeSlider.value / 100;
+});
+document.getElementById('question-sound').addEventListener('ended', () => {
+  document.getElementById('btn-toggle-question-sound').textContent = '▶️';
 });
 
 socket.on('host:player-answered', ({ answeredCount, totalPlayers }) => {
@@ -257,33 +258,12 @@ function startTimer(duration) {
   numEl.textContent = remaining;
   circle.style.strokeDashoffset = 0;
   timerInterval = setInterval(() => {
-    if (isPaused) return;
     remaining -= 1;
     numEl.textContent = Math.max(remaining, 0);
     circle.style.strokeDashoffset = circumference * (1 - Math.max(remaining, 0) / duration);
     if (remaining <= 0) clearInterval(timerInterval);
   }, 1000);
 }
-
-// ---------- Pause ----------
-document.getElementById('btn-toggle-pause').addEventListener('click', () => socket.emit('host:toggle-pause'));
-socket.on('game:paused', () => {
-  isPaused = true;
-  document.getElementById('btn-toggle-pause').textContent = '▶ Reprendre';
-  if (!document.getElementById('pause-overlay-el')) {
-    const overlay = document.createElement('div');
-    overlay.className = 'pause-overlay';
-    overlay.id = 'pause-overlay-el';
-    overlay.textContent = '⏸ Partie en pause';
-    document.body.appendChild(overlay);
-  }
-});
-socket.on('game:resumed', () => {
-  isPaused = false;
-  document.getElementById('btn-toggle-pause').textContent = '⏸ Pause';
-  const overlay = document.getElementById('pause-overlay-el');
-  if (overlay) overlay.remove();
-});
 
 // ---------- Réactions flottantes ----------
 socket.on('host:reaction', ({ emoji }) => {
@@ -334,6 +314,7 @@ function renderLeaderboard(container, leaderboard, withRankChange) {
 socket.on('question:reveal', ({ correctIndexes, stats, leaderboard }) => {
   clearInterval(timerInterval);
   document.getElementById('question-sound').pause();
+  document.getElementById('question-sound-control').classList.add('hidden');
   showScreen('reveal');
 
   const total = stats.reduce((a, b) => a + b, 0) || 1;

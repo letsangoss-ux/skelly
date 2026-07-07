@@ -315,20 +315,17 @@ io.on('connection', (socket) => {
         const alreadyAnswered = !!(game.answers[game.currentQuestion] && game.answers[game.currentQuestion][socket.id]);
         if (q && !alreadyAnswered) {
           const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
-          socket.emit('question:preview', {
+          const durationMs = (q.duration || 20) * 1000;
+          const elapsed = game.questionStartedAt ? Date.now() - game.questionStartedAt : 0;
+          const remainingSec = Math.max(1, Math.ceil((durationMs - elapsed) / 1000));
+          socket.emit('question:show', {
             index: game.currentQuestion, total: game.quiz.questions.length,
             text: q.text || null,
             image: q.image || null,
             sound: q.sound || null,
-            answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
+            answers: q.answers, duration: remainingSec, points: q.points || 1000,
             multipleAnswers: correctIndexes.length > 1,
           });
-          if (game.answeringOpen) {
-            const durationMs = (q.duration || 20) * 1000;
-            const elapsed = Date.now() - game.questionStartedAt;
-            const remainingSec = Math.max(1, Math.ceil((durationMs - elapsed) / 1000));
-            socket.emit('question:answers-open', { duration: remainingSec });
-          }
         }
       } else if (game.state === 'ended') {
         const leaderboard = Object.values(game.players).sort((a, b) => b.score - a.score)
@@ -378,12 +375,6 @@ io.on('connection', (socket) => {
     game.currentQuestion = 0;
     io.to(game.code).emit('game:started');
     sendQuestion(game);
-  });
-
-  socket.on('host:open-answering', () => {
-    const game = games[socket.data.code];
-    if (!game) { socket.emit('host:error', { message: "Partie introuvable côté serveur (le service a probablement redémarré ou s'est mis en veille). Recréez une partie pour continuer." }); return; }
-    openAnswering(game);
   });
 
   socket.on('host:next-question', () => {
@@ -690,40 +681,27 @@ function scheduleAutoReveal(game, remainingMs) {
   }, remainingMs + 400); // petite marge pour laisser le temps aux dernières réponses d'arriver
 }
 
-// Étape 1 : on affiche la question (texte + photo éventuelle + son éventuel) mais
-// personne ne peut encore répondre. C'est l'animateur qui décide, en cliquant sur
-// "Ouvrir les réponses" (voir openAnswering ci-dessous), du moment où le chrono
-// démarre et où les joueurs peuvent cliquer une réponse. Cela laisse le temps à
-// tout le monde de lire/regarder/écouter avant que la course commence.
+// On affiche la question (texte + photo éventuelle + son éventuel) et les
+// réponses sont ouvertes immédiatement : le chrono démarre dès l'envoi de la
+// question aux joueurs.
 function sendQuestion(game) {
   const q = game.quiz.questions[game.currentQuestion];
   if (!q) { console.error('Question introuvable, fin de partie forcée.'); endGame(game); return; }
-  game.questionStartedAt = null;
   game.questionRevealed = false;
-  game.answeringOpen = false;
+  game.answeringOpen = true;
+  game.questionStartedAt = Date.now();
   clearTimeout(game.autoRevealTimer);
   const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
-  io.to(game.code).emit('question:preview', {
+  const duration = q.duration || 20;
+  io.to(game.code).emit('question:show', {
     index: game.currentQuestion, total: game.quiz.questions.length,
     text: q.text || null,
     image: q.image || null,
     sound: q.sound || null,
-    answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
+    answers: q.answers, duration, points: q.points || 1000,
     multipleAnswers: correctIndexes.length > 1,
   });
-}
-
-// Étape 2 : l'animateur clique sur "Ouvrir les réponses" — le chrono démarre
-// réellement à partir de maintenant et les joueurs peuvent cliquer une réponse.
-function openAnswering(game) {
-  if (!game || game.answeringOpen) return;
-  const q = game.quiz.questions[game.currentQuestion];
-  if (!q) return;
-  game.answeringOpen = true;
-  game.questionStartedAt = Date.now();
-  const durationMs = (q.duration || 20) * 1000;
-  io.to(game.code).emit('question:answers-open', { duration: q.duration || 20 });
-  scheduleAutoReveal(game, durationMs);
+  scheduleAutoReveal(game, duration * 1000);
 }
 
 function revealAnswer(game) {
