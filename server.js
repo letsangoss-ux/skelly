@@ -679,20 +679,20 @@ function scheduleAutoReveal(game, remainingMs) {
 
 function sendQuestion(game) {
   const q = game.quiz.questions[game.currentQuestion];
-  if (!q) { console.error('Question introuvable, fin de partie forcée.'); endGame(game); return; }
-  game.questionStartedAt = Date.now();
+  if (!q) { endGame(game); return; }
+  
+  // On ne définit PAS game.questionStartedAt ici
   game.questionRevealed = false;
-  const durationMs = (q.duration || 20) * 1000;
-  const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
-  io.to(game.code).emit('question:show', {
-    index: game.currentQuestion, total: game.quiz.questions.length,
+  
+  // On prévient l'hôte et les joueurs que la question est prête à être lancée
+  io.to(game.code).emit('question:prepare', {
+    index: game.currentQuestion,
+    total: game.quiz.questions.length,
     text: q.text || null,
     image: q.image || null,
     sound: q.sound || null,
-    answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
-    multipleAnswers: correctIndexes.length > 1,
+    duration: q.duration || 20
   });
-  scheduleAutoReveal(game, durationMs);
 }
 
 function revealAnswer(game) {
