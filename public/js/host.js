@@ -11,6 +11,29 @@ let currentPlayersMap = {}; // socketId -> player (pour le bouton "exclure")
 const urlParams = new URLSearchParams(window.location.search);
 const presetQuizId = urlParams.get('quizId');
 
+// ---------- Fiabilité : ne jamais rester bloqué silencieusement ----------
+// Si le serveur signale qu'il ne retrouve plus la partie (ex: le service a
+// redémarré/s'est mis en veille pendant l'attente des joueurs), on prévient
+// clairement au lieu de laisser le bouton "Lancer la partie" ne rien faire.
+socket.on('host:error', ({ message }) => {
+  alert(message || "Un problème est survenu. Merci de recréer une partie.");
+});
+
+// Si la connexion au serveur a été coupée puis rétablie alors qu'on était déjà
+// passé à l'écran de salle d'attente, la partie précédente n'existe plus côté
+// serveur (mémoire perdue). On recrée automatiquement une nouvelle partie avec
+// le même quiz pour ne pas rester bloqué — un nouveau code sera affiché.
+let hasConnectedOnce = false;
+socket.on('connect', () => {
+  if (!hasConnectedOnce) { hasConnectedOnce = true; return; }
+  if (!screens.lobby.classList.contains('hidden') && gameCode) {
+    const quizIdToReuse = (currentQuiz && currentQuiz.id) || presetQuizId;
+    gameCode = null;
+    alert("La connexion avec le serveur a été rétablie mais la partie précédente a été perdue (le service a probablement redémarré). Un nouveau code va être généré.");
+    socket.emit('host:create-game', { quizId: quizIdToReuse });
+  }
+});
+
 const screens = {
   create: document.getElementById('screen-create'),
   lobby: document.getElementById('screen-lobby'),
@@ -141,12 +164,18 @@ document.getElementById('btn-start').addEventListener('click', () => socket.emit
 const answerColors = ['answer-0', 'answer-1', 'answer-2', 'answer-3'];
 let currentAnswersText = [];
 
-socket.on('question:show', (q) => {
+let pendingDuration = 20;
+
+// Étape 1 : aperçu de la question (texte/photo/son), pas de chrono, réponses pas
+// cliquables — l'animateur laisse le temps à tout le monde de prendre connaissance
+// des éléments, puis clique sur "Ouvrir les réponses" quand il est prêt.
+socket.on('question:preview', (q) => {
   showScreen('question');
   isPaused = false;
   document.getElementById('btn-toggle-pause').textContent = '⏸ Pause';
   currentQuestionIndex = q.index;
   currentAnswersText = q.answers;
+  pendingDuration = q.duration;
   document.getElementById('q-progress').textContent = `Question ${q.index + 1} / ${q.total}`;
   document.getElementById('q-text').textContent = q.text || '';
   document.getElementById('q-text').classList.toggle('hidden', !q.text);
@@ -185,7 +214,32 @@ socket.on('question:show', (q) => {
   });
 
   playQuestionMusic();
-  startTimer(q.duration);
+
+  // Écran d'aperçu : chrono figé à la durée totale, bouton "Ouvrir les réponses"
+  // visible, bouton "Révéler" et pause masqués (pas de chrono en cours à interrompre).
+  clearInterval(timerInterval);
+  const circle = document.getElementById('timer-circle');
+  document.getElementById('timer-num').textContent = q.duration;
+  circle.style.strokeDasharray = 2 * Math.PI * 27;
+  circle.style.strokeDashoffset = 0;
+  document.getElementById('btn-open-answering').classList.remove('hidden');
+  document.getElementById('btn-reveal').classList.add('hidden');
+  document.getElementById('btn-toggle-pause').classList.add('hidden');
+  document.getElementById('waiting-msg-answers').classList.add('hidden');
+});
+
+document.getElementById('btn-open-answering').addEventListener('click', () => {
+  socket.emit('host:open-answering');
+});
+
+// Étape 2 : l'animateur a cliqué "Ouvrir les réponses" — le chrono démarre
+// vraiment maintenant et les joueurs peuvent répondre.
+socket.on('question:answers-open', ({ duration }) => {
+  document.getElementById('btn-open-answering').classList.add('hidden');
+  document.getElementById('btn-reveal').classList.remove('hidden');
+  document.getElementById('btn-toggle-pause').classList.remove('hidden');
+  document.getElementById('waiting-msg-answers').classList.remove('hidden');
+  startTimer(duration);
 });
 
 socket.on('host:player-answered', ({ answeredCount, totalPlayers }) => {

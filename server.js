@@ -276,6 +276,7 @@ io.on('connection', (socket) => {
       state: 'lobby',
       currentQuestion: -1,
       questionStartedAt: null,
+      answeringOpen: false,
       paused: false,
       pauseStartedAt: null,
       answers: {},
@@ -314,7 +315,7 @@ io.on('connection', (socket) => {
         const alreadyAnswered = !!(game.answers[game.currentQuestion] && game.answers[game.currentQuestion][socket.id]);
         if (q && !alreadyAnswered) {
           const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
-          socket.emit('question:show', {
+          socket.emit('question:preview', {
             index: game.currentQuestion, total: game.quiz.questions.length,
             text: q.text || null,
             image: q.image || null,
@@ -322,6 +323,12 @@ io.on('connection', (socket) => {
             answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
             multipleAnswers: correctIndexes.length > 1,
           });
+          if (game.answeringOpen) {
+            const durationMs = (q.duration || 20) * 1000;
+            const elapsed = Date.now() - game.questionStartedAt;
+            const remainingSec = Math.max(1, Math.ceil((durationMs - elapsed) / 1000));
+            socket.emit('question:answers-open', { duration: remainingSec });
+          }
         }
       } else if (game.state === 'ended') {
         const leaderboard = Object.values(game.players).sort((a, b) => b.score - a.score)
@@ -366,16 +373,22 @@ io.on('connection', (socket) => {
   // ----- ANIMATEUR : lancer la partie -----
   socket.on('host:start-game', () => {
     const game = games[socket.data.code];
-    if (!game) return;
+    if (!game) { socket.emit('host:error', { message: "Partie introuvable côté serveur (le service a probablement redémarré ou s'est mis en veille). Recréez une partie pour continuer." }); return; }
     game.state = 'playing';
     game.currentQuestion = 0;
     io.to(game.code).emit('game:started');
     sendQuestion(game);
   });
 
+  socket.on('host:open-answering', () => {
+    const game = games[socket.data.code];
+    if (!game) { socket.emit('host:error', { message: "Partie introuvable côté serveur (le service a probablement redémarré ou s'est mis en veille). Recréez une partie pour continuer." }); return; }
+    openAnswering(game);
+  });
+
   socket.on('host:next-question', () => {
     const game = games[socket.data.code];
-    if (!game) return;
+    if (!game) { socket.emit('host:error', { message: "Partie introuvable côté serveur (le service a probablement redémarré ou s'est mis en veille). Recréez une partie pour continuer." }); return; }
     game.currentQuestion++;
     if (game.currentQuestion >= game.quiz.questions.length) endGame(game);
     else sendQuestion(game);
@@ -388,7 +401,7 @@ io.on('connection', (socket) => {
 
   socket.on('host:toggle-pause', () => {
     const game = games[socket.data.code];
-    if (!game || game.state !== 'playing') return;
+    if (!game || game.state !== 'playing' || !game.answeringOpen) return;
     if (!game.paused) {
       game.paused = true;
       game.pauseStartedAt = Date.now();
@@ -420,7 +433,7 @@ io.on('connection', (socket) => {
 
   socket.on('player:submit-answer', ({ answerIndex }) => {
     const game = games[socket.data.code];
-    if (!game || game.state !== 'playing' || game.paused) return;
+    if (!game || game.state !== 'playing' || game.paused || !game.answeringOpen) return;
     const qIndex = game.currentQuestion;
     if (!game.answers[qIndex]) game.answers[qIndex] = {};
     if (game.answers[qIndex][socket.id]) return;
@@ -677,22 +690,40 @@ function scheduleAutoReveal(game, remainingMs) {
   }, remainingMs + 400); // petite marge pour laisser le temps aux dernières réponses d'arriver
 }
 
+// Étape 1 : on affiche la question (texte + photo éventuelle + son éventuel) mais
+// personne ne peut encore répondre. C'est l'animateur qui décide, en cliquant sur
+// "Ouvrir les réponses" (voir openAnswering ci-dessous), du moment où le chrono
+// démarre et où les joueurs peuvent cliquer une réponse. Cela laisse le temps à
+// tout le monde de lire/regarder/écouter avant que la course commence.
 function sendQuestion(game) {
   const q = game.quiz.questions[game.currentQuestion];
-  if (!q) { endGame(game); return; }
-  
-  // On ne définit PAS game.questionStartedAt ici
+  if (!q) { console.error('Question introuvable, fin de partie forcée.'); endGame(game); return; }
+  game.questionStartedAt = null;
   game.questionRevealed = false;
-  
-  // On prévient l'hôte et les joueurs que la question est prête à être lancée
-  io.to(game.code).emit('question:prepare', {
-    index: game.currentQuestion,
-    total: game.quiz.questions.length,
+  game.answeringOpen = false;
+  clearTimeout(game.autoRevealTimer);
+  const correctIndexes = q.correctIndexes && q.correctIndexes.length ? q.correctIndexes : [q.correctIndex || 0];
+  io.to(game.code).emit('question:preview', {
+    index: game.currentQuestion, total: game.quiz.questions.length,
     text: q.text || null,
     image: q.image || null,
     sound: q.sound || null,
-    duration: q.duration || 20
+    answers: q.answers, duration: q.duration || 20, points: q.points || 1000,
+    multipleAnswers: correctIndexes.length > 1,
   });
+}
+
+// Étape 2 : l'animateur clique sur "Ouvrir les réponses" — le chrono démarre
+// réellement à partir de maintenant et les joueurs peuvent cliquer une réponse.
+function openAnswering(game) {
+  if (!game || game.answeringOpen) return;
+  const q = game.quiz.questions[game.currentQuestion];
+  if (!q) return;
+  game.answeringOpen = true;
+  game.questionStartedAt = Date.now();
+  const durationMs = (q.duration || 20) * 1000;
+  io.to(game.code).emit('question:answers-open', { duration: q.duration || 20 });
+  scheduleAutoReveal(game, durationMs);
 }
 
 function revealAnswer(game) {
