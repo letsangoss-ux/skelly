@@ -108,19 +108,13 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
 let wordAcknowledged = false;
 let pendingTurnInfo = null;
 
-socket.on('uc:your-word', ({ word, isImpostor }) => {
+socket.on('uc:your-word', ({ word }) => {
   wordAcknowledged = false;
   pendingTurnInfo = null;
-  document.getElementById('civilian-block').classList.toggle('hidden', isImpostor);
-  document.getElementById('impostor-block').classList.toggle('hidden', !isImpostor);
-  if (!isImpostor) {
-    document.getElementById('your-word-text').textContent = word;
-  } else {
-    const hasWord = !!word;
-    document.getElementById('impostor-word-block').classList.toggle('hidden', !hasWord);
-    document.getElementById('impostor-no-word-text').classList.toggle('hidden', hasWord);
-    if (hasWord) document.getElementById('impostor-word-text').textContent = word;
-  }
+  const hasWord = !!word;
+  document.getElementById('has-word-block').classList.toggle('hidden', !hasWord);
+  document.getElementById('no-word-block').classList.toggle('hidden', hasWord);
+  if (hasWord) document.getElementById('your-word-text').textContent = word;
   showScreen('yourWord');
 });
 

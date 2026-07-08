@@ -47,23 +47,18 @@
     </div>
   </div>
 
-  <!-- ÉCRAN 3 : révélation privée du mot -->
+  <!-- ÉCRAN 3 : révélation privée du mot (identique pour tout le monde, personne ne sait qui est l'imposteur) -->
   <div id="screen-your-word" class="screen hidden">
     <div class="uc-word-reveal">
       <div class="eyebrow">Ton rôle</div>
-      <div id="civilian-block" class="hidden">
+      <div id="has-word-block" class="hidden">
         <p class="subtitle">Ton mot secret est :</p>
         <div class="uc-word-big" id="your-word-text"></div>
         <p class="subtitle">Donne un indice à voix haute sans jamais dire ce mot !</p>
       </div>
-      <div id="impostor-block" class="hidden">
-        <div class="uc-impostor-reveal">🎭 Tu es l'IMPOSTEUR</div>
-        <div id="impostor-word-block" class="hidden">
-          <p class="subtitle">Ton mot à toi (proche des autres, mais pas le même) :</p>
-          <div class="uc-word-big" id="impostor-word-text"></div>
-          <p class="subtitle">Ne dis jamais ton mot ! Écoute bien les indices des autres et essaie de te fondre dans la masse.</p>
-        </div>
-        <p class="subtitle" id="impostor-no-word-text">Tu n'as aucun mot. Écoute bien les autres et bluffe pour te fondre dans la masse !</p>
+      <div id="no-word-block" class="hidden">
+        <p class="subtitle">Tu n'as pas reçu de mot cette manche.</p>
+        <p class="subtitle">Écoute bien les indices des autres, essaie de comprendre de quoi il s'agit, et donne un indice crédible sans te faire démasquer !</p>
       </div>
       <div class="btn-row" style="margin-top:20px;">
         <button class="btn btn-primary" id="btn-word-continue">J'ai vu mon mot, continuer →</button>
