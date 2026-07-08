@@ -861,7 +861,6 @@ function endGame(game) {
 // chacun sur une anecdote différente (jamais la sienne).
 // ============================================================
 const RES_WRITING_DURATION_MS = 45000;
-const RES_GUESS_ROUND_DURATION_MS = 20000;
 
 function resPlayersForHost(game) {
   return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
@@ -906,9 +905,12 @@ function resSendRound(game) {
   io.to(game.code).emit('res:round-started', {
     round: game.round,
     totalRounds,
-    duration: RES_GUESS_ROUND_DURATION_MS / 1000,
   });
-  game.roundTimer = setTimeout(() => resFinishRound(game), RES_GUESS_ROUND_DURATION_MS + 400);
+  // Pas de minuteur ici : chaque manche n'avance que lorsque tout le monde a
+  // effectivement voté (voir 'res:submit-guess'), pour que tout le monde ait
+  // le temps de voter sur toutes les anecdotes. L'animateur garde un bouton
+  // "Forcer la manche suivante" pour débloquer manuellement si un joueur est
+  // déconnecté et ne revient pas.
 }
 
 function resFinishRound(game) {
