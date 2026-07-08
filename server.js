@@ -967,7 +967,7 @@ function resSendCurrentReveal(game) {
   io.to(game.code).emit('res:reveal-anecdote', {
     subjectPseudo: subject.pseudo,
     subjectAvatar: subject.avatar,
-    authorPseudo: realAuthor ? realAuthor.pseudo : '?',
+    authorPseudo: realAuthor ? realAuthor.pseudo : 'Personne (temps écoulé)',
     authorAvatar: realAuthor ? realAuthor.avatar : '/avatars/avatar1.svg',
     text: game.anecdotes[subjectSocketId],
     guesses: guessList,
@@ -984,12 +984,21 @@ function resFinishWriting(game) {
   // sur qui) et de base pour la rotation des devinettes (resBuildRoundAssignment).
   // Les deux doivent rester alignés sur le même ordre, sinon le décalage +1 qui
   // exclut l'auteur ne correspond plus à rien.
-  game.order = game.order.filter((id) => game.anecdotes[id] !== undefined);
-  if (game.order.length < 3) {
-    io.to(game.hostSocketId).emit('res:error', { message: "Pas assez d'anecdotes reçues (3 minimum) pour continuer." });
-    game.state = 'lobby';
-    return;
-  }
+  //
+  // BUGFIX : on ne retire plus les joueurs de game.order quand personne n'a
+  // écrit d'anecdote à leur sujet (parce que leur binôme n'a pas soumis à
+  // temps). Comme game.order sert aussi de liste des devineurs, ces joueurs
+  // se retrouvaient totalement exclus de la phase de devinette — alors même
+  // qu'ils avaient bien envoyé leur propre anecdote — et restaient bloqués
+  // indéfiniment sur l'écran "anecdote envoyée", sans jamais recevoir la
+  // suite. On leur attribue à la place un texte de repli, pour que tout le
+  // monde participe à la phase de devinette.
+  game.order.forEach((subjectId) => {
+    if (game.anecdotes[subjectId] === undefined) {
+      game.anecdotes[subjectId] = "(Personne n'a eu le temps d'écrire une anecdote à ce sujet !)";
+      game.anecdoteAuthors[subjectId] = null;
+    }
+  });
   game.round = 1;
   game.guesses = {};
   game.state = 'guessing';
@@ -1155,7 +1164,7 @@ io.on('connection', (socket) => {
             });
             socket.emit('res:reveal-anecdote', {
               subjectPseudo: subject.pseudo, subjectAvatar: subject.avatar,
-              authorPseudo: realAuthor ? realAuthor.pseudo : '?',
+              authorPseudo: realAuthor ? realAuthor.pseudo : 'Personne (temps écoulé)',
               authorAvatar: realAuthor ? realAuthor.avatar : '/avatars/avatar1.svg',
               text: game.anecdotes[subjectSocketId], guesses: guessList,
               index: game.revealIndex, total: game.order.length,
