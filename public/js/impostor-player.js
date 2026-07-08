@@ -105,7 +105,12 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
 });
 
 // ---------- Révélation privée du mot ----------
+let wordAcknowledged = false;
+let pendingTurnInfo = null;
+
 socket.on('uc:your-word', ({ word, isImpostor }) => {
+  wordAcknowledged = false;
+  pendingTurnInfo = null;
   document.getElementById('civilian-block').classList.toggle('hidden', isImpostor);
   document.getElementById('impostor-block').classList.toggle('hidden', !isImpostor);
   if (!isImpostor) {
@@ -119,15 +124,30 @@ socket.on('uc:your-word', ({ word, isImpostor }) => {
   showScreen('yourWord');
 });
 
-// ---------- Tour de table (le joueur regarde l'écran principal) ----------
-let lastOrder = [];
-socket.on('uc:manche-started-players', ({ order }) => { lastOrder = order; });
-
-socket.on('uc:turn-changed', ({ socketId, round }) => {
+function renderTurnScreen({ socketId, round }) {
   document.getElementById('turn-round').textContent = round;
   const player = lastOrder.find((p) => p.socketId === socketId);
   document.getElementById('turn-indicator').textContent = player ? `C'est au tour de ${player.pseudo}` : '';
   showScreen('turns');
+}
+
+document.getElementById('btn-word-continue').addEventListener('click', () => {
+  wordAcknowledged = true;
+  if (pendingTurnInfo) renderTurnScreen(pendingTurnInfo);
+});
+
+// ---------- Tour de table (le joueur regarde l'écran principal) ----------
+let lastOrder = [];
+socket.on('uc:manche-started-players', ({ order }) => { lastOrder = order; });
+
+socket.on('uc:turn-changed', (data) => {
+  // Tant que le joueur n'a pas cliqué sur "J'ai vu mon mot", on ne bascule pas
+  // automatiquement sur l'écran du tour de table (sinon le mot n'a jamais le temps d'être lu).
+  if (!screens.yourWord.classList.contains('hidden') && !wordAcknowledged) {
+    pendingTurnInfo = data;
+    return;
+  }
+  renderTurnScreen(data);
 });
 
 // ---------- Vote ----------
