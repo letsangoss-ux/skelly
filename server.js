@@ -860,7 +860,6 @@ function endGame(game) {
 // à chaque manche, tous les joueurs devinent simultanément,
 // chacun sur une anecdote différente (jamais la sienne).
 // ============================================================
-const RES_WRITING_DURATION_MS = 45000;
 
 function resPlayersForHost(game) {
   return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
@@ -1005,6 +1004,38 @@ function resFinishWriting(game) {
   resSendRound(game);
 }
 
+function resPairKey(writerPlayerId, subjectPlayerId) {
+  return `${writerPlayerId}=>${subjectPlayerId}`;
+}
+
+// Choisit un ordre d'écriture (cycle écrivain -> sujet) en évitant, autant que
+// possible, de reproduire une paire écrivain/sujet déjà utilisée lors d'une
+// manche précédente de cette même partie (game.writingHistory, indexé par
+// playerId stable pour survivre aux reconnexions). On tire plusieurs cycles
+// au hasard et on garde le premier sans aucune répétition ; si on n'en trouve
+// pas (groupes très petits qui ont déjà épuisé les combinaisons possibles),
+// on garde celui qui minimise les répétitions plutôt que de bloquer la partie.
+function resGenerateWritingOrder(game, playerIds) {
+  const N = playerIds.length;
+  const maxAttempts = 300;
+  let bestOrder = [...playerIds].sort(() => Math.random() - 0.5);
+  let bestRepeats = Infinity;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = [...playerIds].sort(() => Math.random() - 0.5);
+    let repeats = 0;
+    for (let i = 0; i < N; i++) {
+      const writerId = candidate[i];
+      const subjectId = candidate[(i + 1) % N];
+      const writerPid = game.players[writerId].playerId;
+      const subjectPid = game.players[subjectId].playerId;
+      if (game.writingHistory.has(resPairKey(writerPid, subjectPid))) repeats++;
+    }
+    if (repeats < bestRepeats) { bestRepeats = repeats; bestOrder = candidate; }
+    if (repeats === 0) break;
+  }
+  return bestOrder;
+}
+
 function resStartWritingPhase(game) {
   game.state = 'writing';
   game.anecdotes = {};
@@ -1015,10 +1046,16 @@ function resStartWritingPhase(game) {
   // position i+1. Ce même ordre sert ensuite de base à la rotation des devinettes
   // (resBuildRoundAssignment), ce qui garantit qu'on ne devine jamais sa propre
   // anecdote NI celle qu'on a soi-même écrite.
-  game.order = [...playerIds].sort(() => Math.random() - 0.5);
+  // BUGFIX : on essaie maintenant d'éviter qu'un joueur retombe sur la même
+  // personne à écrire lors d'une nouvelle manche (voir resGenerateWritingOrder).
+  game.order = resGenerateWritingOrder(game, playerIds);
   const N = game.order.length;
   game.assignments = {}; // écrivain -> sujet (la personne sur qui il doit écrire)
-  game.order.forEach((writerId, i) => { game.assignments[writerId] = game.order[(i + 1) % N]; });
+  game.order.forEach((writerId, i) => {
+    const subjectId = game.order[(i + 1) % N];
+    game.assignments[writerId] = subjectId;
+    game.writingHistory.add(resPairKey(game.players[writerId].playerId, game.players[subjectId].playerId));
+  });
 
   playerIds.forEach((writerId) => {
     const subjectId = game.assignments[writerId];
@@ -1026,9 +1063,11 @@ function resStartWritingPhase(game) {
     io.to(writerId).emit('res:your-target', { targetPseudo: subject.pseudo, targetAvatar: subject.avatar });
   });
 
-  io.to(game.code).emit('res:writing-started', { duration: RES_WRITING_DURATION_MS / 1000 });
-  clearTimeout(game.writingTimer);
-  game.writingTimer = setTimeout(() => resFinishWriting(game), RES_WRITING_DURATION_MS + 400);
+  io.to(game.code).emit('res:writing-started');
+  // BUGFIX : plus de chrono forcé ici (comme pour les manches de devinette) :
+  // on attend que tout le monde ait réellement soumis son anecdote avant de
+  // passer à la suite. L'animateur garde le bouton "Lancer les devinettes
+  // maintenant" pour débloquer manuellement si quelqu'un ne répond plus.
 }
 
 io.on('connection', (socket) => {
@@ -1050,6 +1089,10 @@ io.on('connection', (socket) => {
       revealIndex: 0,
       writingTimer: null,
       roundTimer: null,
+      // Mémorise les paires écrivain -> sujet déjà utilisées (par playerId stable,
+      // pas socket.id) sur toute la session, pour ne jamais faire retomber
+      // quelqu'un sur la même personne à écrire d'une manche à l'autre.
+      writingHistory: new Set(),
     };
     socket.join(code);
     socket.data.role = 'res-host';
@@ -1127,7 +1170,7 @@ io.on('connection', (socket) => {
         const targetId = game.assignments[socket.id];
         const target = targetId ? game.players[targetId] : null;
         if (target) socket.emit('res:your-target', { targetPseudo: target.pseudo, targetAvatar: target.avatar });
-        socket.emit('res:writing-started', { duration: RES_WRITING_DURATION_MS / 1000 });
+        socket.emit('res:writing-started');
         if (targetId && game.anecdotes[targetId] !== undefined) socket.emit('res:anecdote-received');
       } else if (game.state === 'guessing') {
         const subjectId = game.currentAssignment[socket.id];
