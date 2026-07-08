@@ -1076,12 +1076,91 @@ io.on('connection', (socket) => {
         if (g[existingSocketId] !== undefined) { g[socket.id] = g[existingSocketId]; delete g[existingSocketId]; }
       });
       if (game.guesses[existingSocketId]) { game.guesses[socket.id] = game.guesses[existingSocketId]; delete game.guesses[existingSocketId]; }
+      // BUGFIX : l'assignation de la manche de devinettes en cours (qui devine sur qui)
+      // n'était pas remappée sur le nouveau socket.id, ni en clé (le devineur) ni en
+      // valeur (le sujet deviné). Un joueur qui se reconnectait pendant une manche ne
+      // pouvait donc plus envoyer sa réponse, et ses éventuels votes reçus par les
+      // autres joueurs se perdaient (rangés sous un id mort à la révélation).
+      if (game.currentAssignment) {
+        if (game.currentAssignment[existingSocketId] !== undefined) {
+          game.currentAssignment[socket.id] = game.currentAssignment[existingSocketId];
+          delete game.currentAssignment[existingSocketId];
+        }
+        Object.keys(game.currentAssignment).forEach((guesserId) => {
+          if (game.currentAssignment[guesserId] === existingSocketId) game.currentAssignment[guesserId] = socket.id;
+        });
+      }
+      if (game.roundGuesses) {
+        if (game.roundGuesses[existingSocketId] !== undefined) {
+          game.roundGuesses[socket.id] = game.roundGuesses[existingSocketId];
+          delete game.roundGuesses[existingSocketId];
+        }
+        Object.keys(game.roundGuesses).forEach((guesserId) => {
+          if (game.roundGuesses[guesserId] === existingSocketId) game.roundGuesses[guesserId] = socket.id;
+        });
+      }
       socket.join(code);
       socket.data.role = 'res-player';
       socket.data.code = code;
       socket.data.playerId = playerId;
       socket.emit('res:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
       if (game.hostSocketId) io.to(game.hostSocketId).emit('res:player-joined', { players: resPlayersForHost(game) });
+
+      // BUGFIX : après une reconnexion, le client était systématiquement renvoyé sur
+      // l'écran d'attente, quelle que soit la phase réelle de la partie. S'il n'y avait
+      // pas de nouvelle action serveur pour le faire changer d'écran, il restait bloqué
+      // là (souvent en plein milieu de l'écriture ou d'une manche de devinettes), ce qui
+      // gelait la partie pour tout le monde puisque le décompte des réponses n'atteignait
+      // jamais le total. On resynchronise donc explicitement le bon écran ici.
+      if (game.state === 'writing') {
+        const targetId = game.assignments[socket.id];
+        const target = targetId ? game.players[targetId] : null;
+        if (target) socket.emit('res:your-target', { targetPseudo: target.pseudo, targetAvatar: target.avatar });
+        socket.emit('res:writing-started', { duration: RES_WRITING_DURATION_MS / 1000 });
+        if (targetId && game.anecdotes[targetId] !== undefined) socket.emit('res:anecdote-received');
+      } else if (game.state === 'guessing') {
+        const subjectId = game.currentAssignment[socket.id];
+        if (subjectId !== undefined) {
+          const totalRounds = game.order.length - 2;
+          const optionsList = game.order
+            .filter((sid) => game.players[sid])
+            .map((sid) => ({ socketId: sid, pseudo: game.players[sid].pseudo, avatar: game.players[sid].avatar }));
+          socket.emit('res:your-turn-to-guess', {
+            text: game.anecdotes[subjectId], options: optionsList, round: game.round, totalRounds,
+          });
+          if (game.roundGuesses[socket.id] !== undefined) socket.emit('res:guess-received');
+        }
+      } else if (game.state === 'reveal') {
+        if (game.revealIndex >= game.order.length) {
+          socket.emit('res:reveal-done');
+        } else {
+          const subjectSocketId = game.order[game.revealIndex];
+          const subject = game.players[subjectSocketId];
+          if (subject) {
+            const realAuthorId = game.anecdoteAuthors ? game.anecdoteAuthors[subjectSocketId] : null;
+            const realAuthor = realAuthorId ? game.players[realAuthorId] : null;
+            const guessesForThis = game.guesses[subjectSocketId] || {};
+            const guessList = Object.entries(guessesForThis).map(([guesserSocketId, guessedSocketId]) => {
+              const guesser = game.players[guesserSocketId];
+              const guessed = game.players[guessedSocketId];
+              return {
+                guesserPseudo: guesser ? guesser.pseudo : '?',
+                guesserAvatar: guesser ? guesser.avatar : '/avatars/avatar1.svg',
+                guessedPseudo: guessed ? guessed.pseudo : '(pas de réponse)',
+                guessedAvatar: guessed ? guessed.avatar : '/avatars/avatar1.svg',
+                correct: guessedSocketId === subjectSocketId,
+              };
+            });
+            socket.emit('res:reveal-anecdote', {
+              subjectPseudo: subject.pseudo, subjectAvatar: subject.avatar,
+              authorPseudo: realAuthor ? realAuthor.pseudo : '?',
+              authorAvatar: realAuthor ? realAuthor.avatar : '/avatars/avatar1.svg',
+              text: game.anecdotes[subjectSocketId], guesses: guessList,
+              index: game.revealIndex, total: game.order.length,
+            });
+          }
+        }
+      }
       return;
     }
 

@@ -10,6 +10,13 @@ if (!myPlayerId) {
   myPlayerId = Math.random().toString(16).slice(2) + Date.now().toString(16);
   localStorage.setItem('resPlayerId', myPlayerId);
 }
+// ---------- Identité persistante (pour se reconnecter après coupure) ----------
+// BUGFIX : contrairement au mode quiz, ce mode ne tentait jamais de se
+// rejoindre automatiquement après une coupure réseau ou un rechargement de
+// page (verrouillage du téléphone, wifi qui saute, etc.). Le joueur restait
+// bloqué indéfiniment, ce qui gelait toute la partie pour tout le monde.
+let lastCode = localStorage.getItem('resLastCode') || '';
+let lastPseudo = localStorage.getItem('resLastPseudo') || '';
 
 const screens = {
   join: document.getElementById('screen-join'),
@@ -68,6 +75,8 @@ buildAvatarGallery(document.getElementById('avatar-grid'), selectedAvatar, (url)
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('code')) document.getElementById('input-code').value = params.get('code').toUpperCase();
+else if (lastCode) document.getElementById('input-code').value = lastCode;
+if (lastPseudo) document.getElementById('input-pseudo').value = lastPseudo;
 
 document.getElementById('btn-join').addEventListener('click', join);
 document.getElementById('input-pseudo').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
@@ -77,17 +86,49 @@ function join() {
   const pseudo = document.getElementById('input-pseudo').value.trim();
   document.getElementById('join-error').textContent = '';
   if (!code || !pseudo) { document.getElementById('join-error').textContent = 'Merci de remplir le code et ton pseudo.'; return; }
+  localStorage.setItem('resLastCode', code.toUpperCase());
+  localStorage.setItem('resLastPseudo', pseudo);
   socket.emit('res:join-game', { code, pseudo, avatar: selectedAvatar, playerId: myPlayerId });
 }
 
-socket.on('res:join-error', ({ message }) => { document.getElementById('join-error').textContent = message; });
+// Tentative de reconnexion automatique uniquement si une partie était en cours.
+// BUGFIX : cette logique manquait entièrement. Sans elle, toute coupure socket
+// (fréquente en mobile : verrouillage d'écran, wifi qui saute...) laissait le
+// joueur bloqué sur son écran courant, sans jamais renvoyer 'res:join-game' au
+// serveur, ce qui gelait la partie pour tout le monde.
+const wasInGame = localStorage.getItem('resInGame') === '1';
+if (wasInGame && lastCode && lastPseudo && !params.get('code')) {
+  socket.emit('res:join-game', { code: lastCode, pseudo: lastPseudo, avatar: selectedAvatar, playerId: myPlayerId });
+}
+
+// Si le socket se reconnecte tout seul (coupure passagère) alors que la page est
+// restée ouverte, socket.io redéclenche 'connect' mais ne rejoue jamais nos
+// émissions précédentes : il faut redemander à rejoindre la partie nous-mêmes.
+socket.on('connect', () => {
+  if (localStorage.getItem('resInGame') === '1' && lastCode && lastPseudo) {
+    socket.emit('res:join-game', { code: lastCode, pseudo: lastPseudo, avatar: selectedAvatar, playerId: myPlayerId });
+  }
+});
+
+socket.on('res:join-error', ({ message }) => {
+  document.getElementById('join-error').textContent = message;
+  localStorage.removeItem('resInGame');
+});
 
 socket.on('res:joined', ({ pseudo, avatar }) => {
+  localStorage.setItem('resInGame', '1');
   if (avatar) selectedAvatar = avatar;
   document.getElementById('wait-avatar').src = avatar || selectedAvatar;
   document.getElementById('wait-pseudo').textContent = pseudo;
   showScreen('wait');
+  // Si la partie est déjà en cours (écriture / devinette / révélation), le serveur
+  // envoie juste après un événement de resynchronisation ('res:your-target' +
+  // 'res:writing-started', 'res:your-turn-to-guess' ou 'res:reveal-anecdote') qui
+  // fera automatiquement basculer sur le bon écran via les listeners existants.
 });
+
+socket.on('res:game-ended', () => localStorage.removeItem('resInGame'));
+socket.on('res:host-left', () => localStorage.removeItem('resInGame'));
 
 const avatarPickerPanel = document.getElementById('avatar-picker-panel');
 document.getElementById('btn-change-avatar').addEventListener('click', () => {
