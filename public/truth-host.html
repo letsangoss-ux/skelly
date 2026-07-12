@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Vrai du faux — Animateur</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ÉCRAN 1 : créer la partie -->
+  <div id="screen-create" class="screen">
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">Vrai du faux</div>
+      <h1 class="title-xl">Deux vérités, un mensonge</h1>
+      <p class="subtitle">Chacun écrit 3 affirmations sur lui-même — dont une fausse. Le groupe vote pour démasquer le mensonge. Il faut au moins 3 joueurs.</p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-create">Créer la partie</button>
+      </div>
+      <p class="subtitle" style="margin-top:24px;"><a href="/index.html" style="color:var(--gold);">← Retour à l'accueil</a></p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : salle d'attente -->
+  <div id="screen-lobby" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="eyebrow">Code de la partie</div>
+      <div class="game-code" id="lobby-code">------</div>
+      <div class="qr-box"><div id="qrcode"></div></div>
+      <p class="subtitle">Scannez le QR Code ou allez sur cette adresse et entrez le code.</p>
+      <div class="player-count"><span id="player-count-num">0</span> joueur(s) connecté(s) — 3 minimum</div>
+      <div class="player-pills" id="player-pills"></div>
+      <div class="error-msg" id="lobby-error"></div>
+      <div class="host-controls">
+        <button class="btn btn-primary" id="btn-start" style="width:auto;">Lancer la partie</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 3 : écriture des affirmations -->
+  <div id="screen-writing" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="eyebrow">En ce moment</div>
+      <h1 class="title-xl">Tout le monde écrit ses 3 affirmations...</h1>
+      <p class="subtitle"><span id="writing-count">0</span> / <span id="writing-total">0</span> ont terminé</p>
+      <div class="host-controls">
+        <button class="btn btn-ghost" id="btn-force-guessing" style="width:auto;">Passer aux votes maintenant</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4 : phase de vote -->
+  <div id="screen-guessing" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:760px;">
+      <div class="eyebrow">Sujet <span id="subject-progress">1 / 1</span></div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:14px; margin:10px 0 24px;">
+        <img id="subject-avatar" class="avatar-img-lg" src="">
+        <h1 class="title-xl" id="subject-pseudo" style="font-size:2rem;"></h1>
+      </div>
+      <p class="subtitle" style="text-align:center;">Laquelle de ces 3 affirmations est fausse ?</p>
+      <div id="tl-statements-list" style="margin-top:18px;"></div>
+      <p class="subtitle" style="text-align:center; margin-top:14px;"><span id="guess-count">0</span> / <span id="guess-total">0</span> ont voté</p>
+      <div class="host-controls">
+        <button class="btn btn-ghost" id="btn-force-reveal" style="width:auto;">Forcer la révélation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 5 : révélation -->
+  <div id="screen-reveal" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:760px;">
+      <div class="eyebrow">Révélation <span id="reveal-progress"></span></div>
+      <h1 class="title-xl" style="text-align:center;" id="reveal-pseudo"></h1>
+      <div id="reveal-statements-list" style="margin-top:18px;"></div>
+      <p class="subtitle" style="text-align:center; margin-top:10px;" id="reveal-points"></p>
+      <div id="reveal-guesses" style="margin-top:18px;"></div>
+      <div class="host-controls">
+        <button class="btn btn-primary" id="btn-next-subject" style="width:auto;">Sujet suivant →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 6 : podium final -->
+  <div id="screen-podium" class="screen hidden">
+    <div class="podium-wrap">
+      <div class="eyebrow">Terminé</div>
+      <h1 class="title-xl">Résultats</h1>
+      <div class="podium-stage" id="podium-stage"></div>
+      <div class="leaderboard" id="final-leaderboard" style="margin:0 auto;"></div>
+      <div class="host-controls">
+        <button class="btn btn-ghost" id="btn-end-game" style="width:auto;">Terminer la partie</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="/js/truth-host.js"></script>
+</body>
+</html>

@@ -10,6 +10,7 @@ const screens = {
   global: document.getElementById('screen-global'),
   editor: document.getElementById('screen-editor'),
   ucWords: document.getElementById('screen-uc-words'),
+  vote: document.getElementById('screen-vote'),
 };
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
@@ -162,6 +163,43 @@ document.getElementById('btn-show-history').addEventListener('click', async () =
   showScreen('history');
 });
 document.getElementById('btn-back-dashboard').addEventListener('click', loadDashboard);
+
+// ---------- Vote spécial "Le sort d'Alan" ----------
+document.getElementById('btn-show-vote').addEventListener('click', loadVoteResults);
+document.getElementById('btn-refresh-vote').addEventListener('click', loadVoteResults);
+document.getElementById('btn-back-dashboard-4').addEventListener('click', loadDashboard);
+
+async function loadVoteResults() {
+  const res = await api('/api/admin/votes');
+  const data = await res.json();
+  const totalMsg = document.getElementById('vote-total-msg');
+  const list = document.getElementById('vote-results-list');
+  totalMsg.textContent = `${data.total} vote${data.total > 1 ? 's' : ''} enregistré${data.total > 1 ? 's' : ''} au total.`;
+  list.innerHTML = '';
+  if (data.total === 0) {
+    list.innerHTML = '<p class="subtitle">Aucun vote pour le moment.</p>';
+  } else {
+    const sorted = [...data.results].sort((a, b) => b.count - a.count);
+    sorted.forEach((r) => {
+      const pct = data.total > 0 ? Math.round((r.count / data.total) * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'question-card';
+      row.innerHTML = `
+        <div class="qc-body" style="flex-direction:column; align-items:stretch; gap:6px;">
+          <div style="display:flex; justify-content:space-between; gap:10px;">
+            <span>${escapeHtml(r.label)}</span>
+            <strong>${r.count} vote${r.count > 1 ? 's' : ''} (${pct}%)</strong>
+          </div>
+          <div style="background:rgba(248,243,234,0.1); border-radius:8px; overflow:hidden; height:10px;">
+            <div style="background:var(--gold); height:100%; width:${pct}%;"></div>
+          </div>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  }
+  showScreen('vote');
+}
 
 // ---------- Classement général ----------
 document.getElementById('btn-show-global').addEventListener('click', async () => {

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Dessine-moi un secret — Joueur</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ÉCRAN 1 : rejoindre -->
+  <div id="screen-join" class="screen">
+    <div class="card">
+      <div class="eyebrow" style="text-align:center;display:block;">Dessine-moi un secret</div>
+      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
+      <div class="field">
+        <label for="input-code">Code de la partie</label>
+        <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="input-pseudo">Ton pseudo</label>
+        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Choisis ton avatar</label>
+        <div class="avatar-gallery" id="avatar-grid"></div>
+        <input type="file" id="join-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-join">Rejoindre</button>
+      </div>
+      <div class="error-msg" id="join-error"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : salle d'attente -->
+  <div id="screen-wait" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
+      <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
+      <p class="subtitle">La partie va bientôt commencer. Reste sur cet écran !</p>
+      <button class="change-avatar-btn" id="btn-change-avatar">Changer de photo</button>
+      <div class="avatar-picker-panel hidden" id="avatar-picker-panel">
+        <div class="avatar-gallery" id="wait-avatar-grid"></div>
+        <input type="file" id="wait-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4a : je dessine -->
+  <div id="screen-draw" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:480px;">
+      <div class="eyebrow">Dessine :</div>
+      <h1 class="title-xl" id="draw-word" style="font-size:1.8rem;"></h1>
+      <div class="draw-canvas-wrap">
+        <canvas id="my-canvas" width="800" height="600"></canvas>
+      </div>
+      <div class="draw-toolbar" id="draw-color-row"></div>
+      <div class="draw-toolbar" id="draw-size-row"></div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-ghost" id="btn-clear-canvas">Effacer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4b : je devine -->
+  <div id="screen-guess" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:480px;">
+      <div class="eyebrow" style="text-align:center;display:block;"><span id="guess-drawer-pseudo"></span> dessine</div>
+      <h1 class="title-xl" style="text-align:center;" id="guess-word-hint"></h1>
+      <div class="draw-canvas-wrap">
+        <canvas id="view-canvas" width="800" height="600"></canvas>
+      </div>
+      <div class="field" style="margin-top:16px;">
+        <input type="text" id="guess-input" placeholder="Ta réponse..." maxlength="40" autocomplete="off">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-submit-guess">Envoyer</button>
+      </div>
+      <p class="subtitle hidden" id="found-msg" style="text-align:center;">✅ Trouvé ! Bien joué.</p>
+      <div class="draw-feed" id="guess-feed"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 5 : fin de manche -->
+  <div id="screen-round-end" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">Le mot était</div>
+      <h1 class="title-xl" id="re-word"></h1>
+      <p class="subtitle" id="re-msg"></p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 6 : fin -->
+  <div id="screen-end" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">Terminé</div>
+      <h1 class="title-xl">Merci d'avoir joué !</h1>
+      <p class="subtitle" id="final-score-msg"></p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/draw-player.js"></script>
+</body>
+</html>

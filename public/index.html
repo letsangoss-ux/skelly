@@ -3,43 +3,177 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>La Team Skelly</title>
+<title>La Team Skelly — Édition privée</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="screen">
-    <div class="card" style="text-align:center; max-width:540px;">
-      <div class="logo-mark" style="margin:0 auto 18px;">S</div>
-      <div class="eyebrow">Édition privée</div>
-      <h1 class="title-xl">La Team Skelly</h1>
-      <p class="subtitle">Skelly, skelly, skeleton. GO !</p>
 
-      <div style="margin-top:32px; text-align:left;">
-        <div class="eyebrow" style="margin-bottom:10px;">❓ Quiz</div>
-        <div class="btn-row" style="margin-top:0;">
-          <button class="btn btn-primary" onclick="window.location.href='/player.html'">Rejoindre une partie</button>
-          <button class="btn btn-ghost" onclick="window.location.href='/host.html'">Animateur</button>
-        </div>
-      </div>
-
-      <div style="margin-top:32px; text-align:left;">
-        <div class="eyebrow" style="margin-bottom:10px;">🎭 Imposteur</div>
-        <div class="btn-row" style="margin-top:0;">
-          <button class="btn btn-primary" onclick="window.location.href='/impostor-player.html'">Rejoindre une partie</button>
-          <button class="btn btn-ghost" onclick="window.location.href='/impostor-host.html'">Animateur</button>
-        </div>
-      </div>
-
-      <div style="margin-top:32px; text-align:left;">
-        <div class="eyebrow" style="margin-bottom:10px;">🎲 Le jeu des problèmes</div>
-        <div class="btn-row" style="margin-top:0;">
-          <button class="btn btn-primary" onclick="window.location.href='/resiliance-player.html'">Rejoindre une partie</button>
-          <button class="btn btn-ghost" onclick="window.location.href='/resiliance-host.html'">Animateur</button>
-        </div>
-      </div>
-
-      <p class="subtitle" style="margin-top:28px;"><a href="/admin.html" style="color:var(--gold);">Admin →</a></p>
+  <!-- ÉTAPE 0 : vote spécial "Le destin d'Alan" (une fois par invité) -->
+  <div id="screen-vote" class="screen hidden">
+    <div class="card" style="max-width:560px; text-align:center;">
+      <div class="eyebrow">Vote spécial</div>
+      <h1 class="title-xl" style="font-size:2rem;">Le sort d'Alan</h1>
+      <p class="subtitle" style="text-align:left;">Alan ayant été un mauvais président ces derniers jours et ayant ainsi failli à sa mission qui est de vous divertir, le choix est laissé à vous, membres de la Team Skelly. Que doit-il advenir de son rôle ?</p>
+      <div class="btn-row" id="vote-options" style="margin-top:24px;"></div>
+      <div class="error-msg" id="vote-error"></div>
     </div>
   </div>
+
+  <!-- ÉTAPE 1 : je rejoins ou j'anime -->
+  <div id="screen-role" class="screen hidden">
+    <div class="home-wrap">
+      <header class="home-header">
+        <div class="logo-mark home-logo">S</div>
+        <div class="eyebrow">Édition privée</div>
+        <h1 class="title-xl home-title">La Team Skelly</h1>
+        <p class="home-tagline">Skelly, skelly, skeleton. GO !</p>
+      </header>
+
+      <div class="home-role-choice">
+        <button class="home-btn-primary home-btn-big" id="btn-role-player">Rejoindre une partie</button>
+        <button class="home-btn-link" id="btn-role-host">Je suis l'animateur →</button>
+      </div>
+
+      <footer class="home-footer">
+        <span>La Team Skelly — Édition privée</span>
+        <a href="/admin.html">Administration →</a>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 2 : quel jeu ? -->
+  <div id="screen-games" class="screen hidden">
+    <div class="home-wrap">
+      <header class="home-header">
+        <div class="eyebrow" id="games-eyebrow">Choisis ton jeu</div>
+        <h1 class="title-xl home-title" style="font-size:2.1rem;">Au programme</h1>
+      </header>
+
+      <nav class="home-game-list" id="game-list" aria-label="Choix du jeu">
+        <a class="home-game-row" data-player="/player.html" data-host="/host.html">
+          <span class="home-game-num">I</span>
+          <span class="home-game-label">Quiz</span>
+          <span class="home-game-arrow">→</span>
+        </a>
+        <a class="home-game-row" data-player="/impostor-player.html" data-host="/impostor-host.html">
+          <span class="home-game-num">II</span>
+          <span class="home-game-label">Imposteur</span>
+          <span class="home-game-arrow">→</span>
+        </a>
+        <a class="home-game-row" data-player="/resiliance-player.html" data-host="/resiliance-host.html">
+          <span class="home-game-num">III</span>
+          <span class="home-game-label">Le jeu des problèmes</span>
+          <span class="home-game-arrow">→</span>
+        </a>
+        <a class="home-game-row" data-player="/truth-player.html" data-host="/truth-host.html">
+          <span class="home-game-num">IV</span>
+          <span class="home-game-label">Vrai du faux</span>
+          <span class="home-game-arrow">→</span>
+        </a>
+        <a class="home-game-row" data-player="/draw-player.html" data-host="/draw-host.html">
+          <span class="home-game-num">V</span>
+          <span class="home-game-label">Dessine-moi un secret</span>
+          <span class="home-game-arrow">→</span>
+        </a>
+      </nav>
+
+      <footer class="home-footer">
+        <button class="home-back-link" id="btn-back-role">← Retour</button>
+        <a href="/admin.html">Administration →</a>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    const screenVote = document.getElementById('screen-vote');
+    const screenRole = document.getElementById('screen-role');
+    const screenGames = document.getElementById('screen-games');
+    const gamesEyebrow = document.getElementById('games-eyebrow');
+    let role = 'player';
+
+    // ---------- Vote spécial "Le destin d'Alan" ----------
+    function getVoterId() {
+      let id = localStorage.getItem('skellyVoterId');
+      if (!id) {
+        id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+        localStorage.setItem('skellyVoterId', id);
+      }
+      return id;
+    }
+
+    function showHome() {
+      screenVote.classList.add('hidden');
+      screenRole.classList.remove('hidden');
+    }
+
+    async function initVote() {
+      const voterId = getVoterId();
+      try {
+        const statusRes = await fetch('/api/vote/status?voterId=' + encodeURIComponent(voterId));
+        const status = await statusRes.json();
+        if (status.voted) { showHome(); return; }
+
+        const optionsRes = await fetch('/api/vote/options');
+        const options = await optionsRes.json();
+        const container = document.getElementById('vote-options');
+        const errorEl = document.getElementById('vote-error');
+        container.innerHTML = '';
+        options.forEach((opt) => {
+          const btn = document.createElement('button');
+          btn.className = 'home-btn-primary';
+          btn.style.textAlign = 'left';
+          btn.textContent = opt.label;
+          btn.addEventListener('click', async () => {
+            container.querySelectorAll('button').forEach((b) => (b.disabled = true));
+            errorEl.textContent = '';
+            try {
+              const res = await fetch('/api/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voterId, choice: opt.id }),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                errorEl.textContent = data.error || 'Erreur lors du vote.';
+                container.querySelectorAll('button').forEach((b) => (b.disabled = false));
+                if (res.status === 409) showHome();
+                return;
+              }
+              showHome();
+            } catch (e) {
+              errorEl.textContent = 'Impossible de contacter le serveur.';
+              container.querySelectorAll('button').forEach((b) => (b.disabled = false));
+            }
+          });
+          container.appendChild(btn);
+        });
+        screenVote.classList.remove('hidden');
+      } catch (e) {
+        // En cas de souci réseau, on n'empêche pas l'accès au site
+        showHome();
+      }
+    }
+    initVote();
+
+    function goToGames(chosenRole) {
+      role = chosenRole;
+      gamesEyebrow.textContent = chosenRole === 'host' ? "Choisis ton jeu — animateur" : 'Choisis ton jeu';
+      screenRole.classList.add('hidden');
+      screenGames.classList.remove('hidden');
+    }
+
+    document.getElementById('btn-role-player').addEventListener('click', () => goToGames('player'));
+    document.getElementById('btn-role-host').addEventListener('click', () => goToGames('host'));
+    document.getElementById('btn-back-role').addEventListener('click', () => {
+      screenGames.classList.add('hidden');
+      screenRole.classList.remove('hidden');
+    });
+
+    document.querySelectorAll('.home-game-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        window.location.href = role === 'host' ? row.dataset.host : row.dataset.player;
+      });
+    });
+  </script>
 </body>
 </html>

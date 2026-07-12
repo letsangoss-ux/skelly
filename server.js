@@ -22,6 +22,7 @@ app.use(express.json({ limit: '2mb' }));
 const QUIZ_FILE = path.join(__dirname, 'data', 'quizzes.json');
 const CONFIG_FILE = path.join(__dirname, 'data', 'config.json');
 const HISTORY_FILE = path.join(__dirname, 'data', 'history.json');
+const VOTES_FILE = path.join(__dirname, 'data', 'votes.json');
 
 function loadQuizzes() {
   if (!fs.existsSync(QUIZ_FILE)) fs.writeFileSync(QUIZ_FILE, '[]');
@@ -31,6 +32,52 @@ function saveQuizzes(quizzes) { fs.writeFileSync(QUIZ_FILE, JSON.stringify(quizz
 function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')); }
 function loadHistory() { return fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8')) : []; }
 function saveHistory(history) { fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2)); }
+function loadVotes() { return fs.existsSync(VOTES_FILE) ? JSON.parse(fs.readFileSync(VOTES_FILE, 'utf-8')) : []; }
+function saveVotes(votes) { fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2)); }
+
+// ------------------------------------------------------------
+// VOTE "Destin d'Alan" — chaque invité ne peut voter qu'une fois
+// (identifié par un voterId généré côté navigateur et stocké en localStorage)
+// ------------------------------------------------------------
+const VOTE_OPTIONS = [
+  { id: 'alan', label: 'Alan reste président à vie' },
+  { id: 'oracle', label: "Oracle devient présidente jusqu'à ce que Myriam pense à Estelle" },
+  { id: 'ethan', label: "Ethan devient président jusqu'à ce qu'il reparte à Maing" },
+  { id: 'andreane', label: "Andréane devient présidente jusqu'à ce qu'elle quitte Hugo" },
+  { id: 'maxime', label: "Maxime devient président jusqu'à ce que Angel répare son œil accidenté" },
+];
+const VOTE_OPTION_IDS = new Set(VOTE_OPTIONS.map((o) => o.id));
+
+app.get('/api/vote/options', (req, res) => res.json(VOTE_OPTIONS));
+
+app.get('/api/vote/status', (req, res) => {
+  const voterId = (req.query.voterId || '').toString();
+  if (!voterId) return res.json({ voted: false });
+  const votes = loadVotes();
+  const existing = votes.find((v) => v.voterId === voterId);
+  res.json({ voted: !!existing, choice: existing ? existing.choice : null });
+});
+
+app.post('/api/vote', (req, res) => {
+  const { voterId, choice } = req.body || {};
+  if (!voterId || typeof voterId !== 'string') return res.status(400).json({ error: 'Identifiant votant manquant.' });
+  if (!VOTE_OPTION_IDS.has(choice)) return res.status(400).json({ error: 'Choix invalide.' });
+  const votes = loadVotes();
+  if (votes.some((v) => v.voterId === voterId)) return res.status(409).json({ error: 'Vous avez déjà voté.' });
+  votes.push({ voterId, choice, date: new Date().toISOString() });
+  saveVotes(votes);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/votes', requireAdmin, (req, res) => {
+  const votes = loadVotes();
+  const results = VOTE_OPTIONS.map((opt) => ({
+    id: opt.id,
+    label: opt.label,
+    count: votes.filter((v) => v.choice === opt.id).length,
+  }));
+  res.json({ total: votes.length, results });
+});
 
 // Convertit une URL publique ("/uploads/xxx.jpg" ou "/audio/xxx.mp3") en chemin réel sur le disque
 function urlToDiskPath(url) {
@@ -1331,6 +1378,515 @@ io.on('connection', (socket) => {
       clearTimeout(game.writingTimer);
       clearTimeout(game.roundTimer);
       io.to(code).emit('res:host-left');
+      delete games[code];
+    }
+  });
+});
+
+// ============================================================
+// MODE "VRAI DU FAUX" (Two truths and a lie)
+// Chaque joueur écrit 3 affirmations sur lui-même (2 vraies, 1 fausse) sans
+// dire laquelle. Puis, joueur par joueur, tout le monde vote pour celle qui
+// est fausse. Le sujet marque des points pour chaque personne qu'il a
+// trompée, les autres marquent des points s'ils trouvent le mensonge.
+// ============================================================
+function tlPlayersForHost(game) {
+  return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
+}
+
+function tlStartWriting(game) {
+  game.state = 'writing';
+  game.statements = {};
+  game.lieIndex = {};
+  io.to(game.code).emit('tl:writing-started');
+}
+
+function tlStartGuessing(game) {
+  const subjectIds = Object.keys(game.statements).filter((id) => game.players[id]);
+  if (subjectIds.length < 2) {
+    io.to(game.code).emit('tl:error', { message: 'Pas assez de joueurs ont envoyé leurs affirmations.' });
+    return;
+  }
+  game.order = subjectIds.sort(() => Math.random() - 0.5);
+  game.subjectIndex = 0;
+  game.state = 'guessing';
+  tlSendSubject(game);
+}
+
+function tlSendSubject(game) {
+  const subjectId = game.order[game.subjectIndex];
+  const subject = game.players[subjectId];
+  if (!subject) { // le sujet est parti définitivement : on saute
+    game.subjectIndex++;
+    if (game.subjectIndex >= game.order.length) return tlEndGame(game);
+    return tlSendSubject(game);
+  }
+  game.currentGuesses = {};
+  const payload = {
+    subjectSocketId: subjectId,
+    subjectPseudo: subject.pseudo,
+    subjectAvatar: subject.avatar,
+    statements: game.statements[subjectId],
+    index: game.subjectIndex + 1,
+    total: game.order.length,
+  };
+  game.lastGuessPhase = payload;
+  io.to(game.code).emit('tl:guess-phase', payload);
+}
+
+function tlRevealCurrent(game) {
+  const subjectId = game.order[game.subjectIndex];
+  const subject = game.players[subjectId];
+  const lie = game.lieIndex[subjectId];
+  const guesses = Object.entries(game.currentGuesses).map(([guesserSocketId, guessIndex]) => {
+    const guesser = game.players[guesserSocketId];
+    const correct = guessIndex === lie;
+    if (correct && guesser) guesser.score += 500;
+    return {
+      guesserPseudo: guesser ? guesser.pseudo : '?',
+      guesserAvatar: guesser ? guesser.avatar : '/avatars/avatar1.svg',
+      guessIndex, correct,
+    };
+  });
+  const wrongCount = guesses.filter((g) => !g.correct).length;
+  const subjectPoints = wrongCount * 150;
+  if (subject) subject.score += subjectPoints;
+
+  const payload = {
+    subjectPseudo: subject ? subject.pseudo : '?',
+    subjectAvatar: subject ? subject.avatar : '/avatars/avatar1.svg',
+    statements: game.statements[subjectId],
+    lieIndex: lie,
+    guesses, subjectPoints,
+    index: game.subjectIndex + 1,
+    total: game.order.length,
+  };
+  game.state = 'reveal';
+  game.lastReveal = payload;
+  io.to(game.code).emit('tl:reveal', payload);
+}
+
+function tlEndGame(game) {
+  game.state = 'ended';
+  const leaderboard = Object.values(game.players).sort((a, b) => b.score - a.score)
+    .map((p) => ({ pseudo: p.pseudo, avatar: p.avatar, score: p.score }));
+  game.finalLeaderboard = leaderboard;
+  io.to(game.code).emit('tl:game-over', { leaderboard });
+}
+
+io.on('connection', (socket) => {
+  socket.on('tl:create-game', () => {
+    const code = generateCode();
+    games[code] = {
+      code, mode: 'truthlie',
+      hostSocketId: socket.id,
+      players: {}, playerIdIndex: {},
+      state: 'lobby',
+      statements: {}, lieIndex: {},
+      order: [], subjectIndex: 0,
+      currentGuesses: {},
+    };
+    socket.join(code);
+    socket.data.role = 'tl-host';
+    socket.data.code = code;
+    socket.emit('tl:game-created', { code });
+  });
+
+  socket.on('tl:join-game', ({ code, pseudo, avatar, playerId }) => {
+    code = (code || '').toUpperCase().trim();
+    const game = games[code];
+    if (!game || game.mode !== 'truthlie') return socket.emit('tl:join-error', { message: 'Code introuvable. Vérifiez le code et réessayez.' });
+
+    const existingSocketId = playerId && game.playerIdIndex[playerId];
+    if (existingSocketId && game.players[existingSocketId]) {
+      const player = game.players[existingSocketId];
+      delete game.players[existingSocketId];
+      game.players[socket.id] = player;
+      game.playerIdIndex[playerId] = socket.id;
+      if (game.statements[existingSocketId] !== undefined) { game.statements[socket.id] = game.statements[existingSocketId]; delete game.statements[existingSocketId]; }
+      if (game.lieIndex[existingSocketId] !== undefined) { game.lieIndex[socket.id] = game.lieIndex[existingSocketId]; delete game.lieIndex[existingSocketId]; }
+      game.order = game.order.map((id) => (id === existingSocketId ? socket.id : id));
+      if (game.currentGuesses[existingSocketId] !== undefined) { game.currentGuesses[socket.id] = game.currentGuesses[existingSocketId]; delete game.currentGuesses[existingSocketId]; }
+      socket.join(code);
+      socket.data.role = 'tl-player';
+      socket.data.code = code;
+      socket.data.playerId = playerId;
+      socket.emit('tl:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
+      if (game.hostSocketId) io.to(game.hostSocketId).emit('tl:player-joined', { players: tlPlayersForHost(game) });
+
+      if (game.state === 'writing') {
+        if (game.statements[socket.id] !== undefined) socket.emit('tl:statements-received');
+        else socket.emit('tl:writing-started');
+      } else if (game.state === 'guessing' && game.lastGuessPhase) {
+        socket.emit('tl:guess-phase', game.lastGuessPhase);
+        if (game.currentGuesses[socket.id] !== undefined) socket.emit('tl:guess-received');
+      } else if (game.state === 'reveal' && game.lastReveal) {
+        socket.emit('tl:reveal', game.lastReveal);
+      } else if (game.state === 'ended' && game.finalLeaderboard) {
+        socket.emit('tl:game-over', { leaderboard: game.finalLeaderboard });
+      }
+      return;
+    }
+
+    if (game.state !== 'lobby') return socket.emit('tl:join-error', { message: 'La partie a déjà commencé.' });
+
+    const cleanPseudo = (pseudo || 'Joueur').trim().slice(0, 16);
+    const pid = playerId || crypto.randomBytes(8).toString('hex');
+    game.players[socket.id] = { playerId: pid, pseudo: cleanPseudo, avatar: avatar || '/avatars/avatar1.svg', score: 0 };
+    game.playerIdIndex[pid] = socket.id;
+    socket.join(code);
+    socket.data.role = 'tl-player';
+    socket.data.code = code;
+    socket.data.playerId = pid;
+    socket.emit('tl:joined', { code, pseudo: cleanPseudo, avatar, playerId: pid });
+    io.to(game.hostSocketId).emit('tl:player-joined', { players: tlPlayersForHost(game) });
+  });
+
+  socket.on('tl:update-avatar', ({ avatar }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie') return;
+    const player = game.players[socket.id];
+    if (!player || !avatar) return;
+    player.avatar = avatar;
+    if (game.hostSocketId) io.to(game.hostSocketId).emit('tl:player-joined', { players: tlPlayersForHost(game) });
+  });
+
+  socket.on('tl:host-start', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie') return;
+    if (Object.keys(game.players).length < 3) return socket.emit('tl:error', { message: 'Il faut au moins 3 joueurs pour commencer.' });
+    tlStartWriting(game);
+  });
+
+  socket.on('tl:submit-statements', ({ statements, lieIndex }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie' || game.state !== 'writing') return;
+    if (!Array.isArray(statements) || statements.length !== 3) return;
+    const clean = statements.map((s) => (s || '').toString().trim().slice(0, 100));
+    if (clean.some((s) => !s)) return;
+    if (![0, 1, 2].includes(lieIndex)) return;
+    game.statements[socket.id] = clean;
+    game.lieIndex[socket.id] = lieIndex;
+    socket.emit('tl:statements-received');
+    const count = Object.keys(game.statements).length;
+    const total = Object.keys(game.players).length;
+    io.to(game.hostSocketId).emit('tl:writing-progress', { count, total });
+    if (count >= total) tlStartGuessing(game);
+  });
+
+  socket.on('tl:force-start-guessing', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'truthlie' && game.state === 'writing') tlStartGuessing(game);
+  });
+
+  socket.on('tl:submit-guess', ({ guessIndex }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie' || game.state !== 'guessing') return;
+    const subjectId = game.order[game.subjectIndex];
+    if (socket.id === subjectId) return;
+    if (game.currentGuesses[socket.id] !== undefined) return;
+    if (![0, 1, 2].includes(guessIndex)) return;
+    game.currentGuesses[socket.id] = guessIndex;
+    socket.emit('tl:guess-received');
+    const answeredCount = Object.keys(game.currentGuesses).length;
+    const totalGuessers = Object.keys(game.players).length - 1;
+    io.to(game.hostSocketId).emit('tl:guess-progress', { answeredCount, totalGuessers });
+    if (totalGuessers > 0 && answeredCount >= totalGuessers) tlRevealCurrent(game);
+  });
+
+  socket.on('tl:force-reveal', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'truthlie' && game.state === 'guessing') tlRevealCurrent(game);
+  });
+
+  socket.on('tl:next-subject', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie' || game.state !== 'reveal') return;
+    game.subjectIndex++;
+    if (game.subjectIndex >= game.order.length) tlEndGame(game);
+    else { game.state = 'guessing'; tlSendSubject(game); }
+  });
+
+  socket.on('tl:end-game', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie') return;
+    io.to(game.code).emit('tl:game-ended');
+    delete games[game.code];
+  });
+
+  socket.on('disconnect', () => {
+    const code = socket.data.code;
+    if (!code || !games[code] || games[code].mode !== 'truthlie') return;
+    const game = games[code];
+    if (socket.data.role === 'tl-player') {
+      io.to(game.hostSocketId).emit('tl:player-joined', { players: tlPlayersForHost(game) });
+    } else if (socket.data.role === 'tl-host') {
+      io.to(code).emit('tl:host-left');
+      delete games[code];
+    }
+  });
+});
+
+// ============================================================
+// MODE "DESSINE-MOI UN SECRET" (Pictionary)
+// Un joueur ("le dessinateur") dessine un mot sur son téléphone ; le dessin
+// est retransmis en direct sur l'écran de l'animateur (le tableau commun).
+// Les autres joueurs devinent depuis leur téléphone. Rotation à chaque manche.
+// ============================================================
+const DRAW_WORDS = [
+  'Girafe', 'Pizza', 'Guitare', 'Parapluie', 'Fusée', 'Pirate', 'Château', 'Dinosaure', 'Sirène', 'Robot',
+  'Cactus', 'Glace', 'Vélo', 'Montgolfière', 'Sushi', 'Fantôme', 'Trésor', 'Volcan', 'Dragon', 'Licorne',
+  'Astronaute', 'Chameau', 'Baleine', 'Tornade', 'Sapin de Noël', 'Piano', 'Aquarium', 'Cerf-volant', 'Boussole', 'Igloo',
+  'Moulin à vent', 'Champignon', 'Escargot', 'Toboggan', 'Fauteuil', 'Horloge', 'Kangourou', 'Labyrinthe', 'Méduse', 'Nuage',
+  'Ovni', 'Perroquet', 'Requin', 'Tracteur', 'Ukulélé', 'Voilier', 'Zèbre', 'Croissant', 'Camion de pompier', 'Montagnes russes',
+  'Hérisson', 'Éléphant', 'Sous-marin', 'Cheminée', 'Boussole', 'Chapeau de sorcière', 'Chevalier', 'Momie', 'Sablier', 'Trampoline',
+];
+
+function drawPlayersForHost(game) {
+  return Object.entries(game.players).map(([socketId, p]) => ({ ...p, socketId }));
+}
+
+function drawPickWords(game, n) {
+  const available = DRAW_WORDS.filter((w) => !game.usedWords.has(w));
+  const pool = available.length >= n ? available : DRAW_WORDS;
+  const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, n);
+  return picked;
+}
+
+function drawStartRound(game) {
+  clearTimeout(game.roundTimer);
+  game.drawerSocketId = game.order[game.roundIndex];
+  const drawer = game.players[game.drawerSocketId];
+  if (!drawer) { // le dessinateur prévu n'est plus là : on saute son tour
+    game.roundIndex++;
+    if (game.roundIndex >= game.order.length) return drawEndGame(game);
+    return drawStartRound(game);
+  }
+  const word = drawPickWords(game, 1)[0];
+  drawBeginDrawing(game, word);
+}
+
+function drawBeginDrawing(game, word) {
+  game.currentWord = word;
+  game.usedWords.add(word);
+  game.guessesThisRound = {};
+  game.correctOrder = [];
+  game.state = 'drawing';
+  game.roundStartedAt = Date.now();
+  game.roundDuration = 75000;
+  const drawer = game.players[game.drawerSocketId];
+
+  io.to(game.drawerSocketId).emit('draw:round-started', {
+    isDrawer: true, word, round: game.roundIndex + 1, total: game.order.length, duration: game.roundDuration,
+  });
+  const hint = { isDrawer: false, wordLength: word.replace(/\s/g, '').length, round: game.roundIndex + 1, total: game.order.length, duration: game.roundDuration, drawerPseudo: drawer.pseudo, drawerAvatar: drawer.avatar };
+  Object.keys(game.players).forEach((sid) => { if (sid !== game.drawerSocketId) io.to(sid).emit('draw:round-started', hint); });
+  if (game.hostSocketId) io.to(game.hostSocketId).emit('draw:round-started', hint);
+
+  game.roundTimer = setTimeout(() => drawEndRound(game), game.roundDuration);
+}
+
+function drawEndRound(game) {
+  if (game.state !== 'drawing') return;
+  clearTimeout(game.roundTimer);
+  game.state = 'round-end';
+
+  const results = [];
+  game.correctOrder.forEach((sid, i) => {
+    const p = game.players[sid];
+    if (!p) return;
+    const pts = Math.max(300, 1000 - i * 150);
+    p.score += pts;
+    results.push({ pseudo: p.pseudo, avatar: p.avatar, points: pts, found: true });
+  });
+  Object.keys(game.players).forEach((sid) => {
+    if (sid === game.drawerSocketId || game.guessesThisRound[sid]) return;
+    const p = game.players[sid];
+    results.push({ pseudo: p.pseudo, avatar: p.avatar, points: 0, found: false });
+  });
+  const drawerBonus = game.correctOrder.length * 100;
+  if (game.players[game.drawerSocketId]) game.players[game.drawerSocketId].score += drawerBonus;
+
+  const drawer = game.players[game.drawerSocketId];
+  const payload = {
+    word: game.currentWord || '(mot)',
+    drawerPseudo: drawer ? drawer.pseudo : '?',
+    drawerAvatar: drawer ? drawer.avatar : '/avatars/avatar1.svg',
+    drawerPoints: drawerBonus,
+    results,
+    round: game.roundIndex + 1,
+    total: game.order.length,
+  };
+  game.lastRoundEnd = payload;
+  io.to(game.code).emit('draw:round-end', payload);
+}
+
+function drawEndGame(game) {
+  game.state = 'ended';
+  const leaderboard = Object.values(game.players).sort((a, b) => b.score - a.score)
+    .map((p) => ({ pseudo: p.pseudo, avatar: p.avatar, score: p.score }));
+  game.finalLeaderboard = leaderboard;
+  io.to(game.code).emit('draw:game-over', { leaderboard });
+}
+
+io.on('connection', (socket) => {
+  socket.on('draw:create-game', () => {
+    const code = generateCode();
+    games[code] = {
+      code, mode: 'draw',
+      hostSocketId: socket.id,
+      players: {}, playerIdIndex: {},
+      state: 'lobby',
+      order: [], roundIndex: 0,
+      drawerSocketId: null,
+      currentWord: null,
+      guessesThisRound: {}, correctOrder: [],
+      roundStartedAt: null, roundDuration: 75000,
+      usedWords: new Set(),
+      roundTimer: null,
+    };
+    socket.join(code);
+    socket.data.role = 'draw-host';
+    socket.data.code = code;
+    socket.emit('draw:game-created', { code });
+  });
+
+  socket.on('draw:join-game', ({ code, pseudo, avatar, playerId }) => {
+    code = (code || '').toUpperCase().trim();
+    const game = games[code];
+    if (!game || game.mode !== 'draw') return socket.emit('draw:join-error', { message: 'Code introuvable. Vérifiez le code et réessayez.' });
+
+    const existingSocketId = playerId && game.playerIdIndex[playerId];
+    if (existingSocketId && game.players[existingSocketId]) {
+      const player = game.players[existingSocketId];
+      delete game.players[existingSocketId];
+      game.players[socket.id] = player;
+      game.playerIdIndex[playerId] = socket.id;
+      game.order = game.order.map((id) => (id === existingSocketId ? socket.id : id));
+      if (game.drawerSocketId === existingSocketId) game.drawerSocketId = socket.id;
+      if (game.guessesThisRound[existingSocketId] !== undefined) { game.guessesThisRound[socket.id] = game.guessesThisRound[existingSocketId]; delete game.guessesThisRound[existingSocketId]; }
+      game.correctOrder = game.correctOrder.map((id) => (id === existingSocketId ? socket.id : id));
+      socket.join(code);
+      socket.data.role = 'draw-player';
+      socket.data.code = code;
+      socket.data.playerId = playerId;
+      socket.emit('draw:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
+      if (game.hostSocketId) io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
+
+      if (game.state === 'drawing') {
+        if (socket.id === game.drawerSocketId) {
+          socket.emit('draw:round-started', { isDrawer: true, word: game.currentWord, round: game.roundIndex + 1, total: game.order.length, duration: game.roundDuration });
+        } else {
+          const drawer = game.players[game.drawerSocketId];
+          socket.emit('draw:round-started', { isDrawer: false, wordLength: (game.currentWord || '').replace(/\s/g, '').length, round: game.roundIndex + 1, total: game.order.length, duration: game.roundDuration, drawerPseudo: drawer ? drawer.pseudo : '?', drawerAvatar: drawer ? drawer.avatar : '/avatars/avatar1.svg' });
+          if (game.guessesThisRound[socket.id]) socket.emit('draw:you-found-it');
+        }
+      } else if (game.state === 'round-end' && game.lastRoundEnd) {
+        socket.emit('draw:round-end', game.lastRoundEnd);
+      } else if (game.state === 'ended' && game.finalLeaderboard) {
+        socket.emit('draw:game-over', { leaderboard: game.finalLeaderboard });
+      }
+      return;
+    }
+
+    if (game.state !== 'lobby') return socket.emit('draw:join-error', { message: 'La partie a déjà commencé.' });
+
+    const cleanPseudo = (pseudo || 'Joueur').trim().slice(0, 16);
+    const pid = playerId || crypto.randomBytes(8).toString('hex');
+    game.players[socket.id] = { playerId: pid, pseudo: cleanPseudo, avatar: avatar || '/avatars/avatar1.svg', score: 0 };
+    game.playerIdIndex[pid] = socket.id;
+    socket.join(code);
+    socket.data.role = 'draw-player';
+    socket.data.code = code;
+    socket.data.playerId = pid;
+    socket.emit('draw:joined', { code, pseudo: cleanPseudo, avatar, playerId: pid });
+    io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
+  });
+
+  socket.on('draw:update-avatar', ({ avatar }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw') return;
+    const player = game.players[socket.id];
+    if (!player || !avatar) return;
+    player.avatar = avatar;
+    if (game.hostSocketId) io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
+  });
+
+  socket.on('draw:host-start', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw') return;
+    if (Object.keys(game.players).length < 3) return socket.emit('draw:error', { message: 'Il faut au moins 3 joueurs pour commencer.' });
+    game.order = Object.keys(game.players).sort(() => Math.random() - 0.5);
+    game.roundIndex = 0;
+    drawStartRound(game);
+  });
+
+  socket.on('draw:stroke', (data) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'drawing') return;
+    if (socket.id !== game.drawerSocketId) return;
+    socket.to(game.code).emit('draw:stroke', data);
+  });
+
+  socket.on('draw:clear', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'drawing') return;
+    if (socket.id !== game.drawerSocketId) return;
+    socket.to(game.code).emit('draw:clear');
+  });
+
+  socket.on('draw:guess', ({ text }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'drawing') return;
+    if (socket.id === game.drawerSocketId) return;
+    if (game.guessesThisRound[socket.id]) return;
+    const player = game.players[socket.id];
+    if (!player) return;
+    const clean = (text || '').toString().trim().slice(0, 40);
+    if (!clean) return;
+    const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    if (normalize(clean) === normalize(game.currentWord || '')) {
+      game.guessesThisRound[socket.id] = true;
+      game.correctOrder.push(socket.id);
+      io.to(game.code).emit('draw:guess-correct', { pseudo: player.pseudo, rank: game.correctOrder.length });
+      socket.emit('draw:you-found-it');
+      const totalGuessers = Object.keys(game.players).length - 1;
+      if (totalGuessers > 0 && game.correctOrder.length >= totalGuessers) drawEndRound(game);
+    } else {
+      io.to(game.code).emit('draw:guess-wrong', { pseudo: player.pseudo, text: clean });
+    }
+  });
+
+  socket.on('draw:force-end-round', () => {
+    const game = games[socket.data.code];
+    if (game && game.mode === 'draw') drawEndRound(game);
+  });
+
+  socket.on('draw:host-next-round', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'round-end') return;
+    game.roundIndex++;
+    if (game.roundIndex >= game.order.length) drawEndGame(game);
+    else drawStartRound(game);
+  });
+
+  socket.on('draw:end-game', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw') return;
+    clearTimeout(game.roundTimer);
+    io.to(game.code).emit('draw:game-ended');
+    delete games[game.code];
+  });
+
+  socket.on('disconnect', () => {
+    const code = socket.data.code;
+    if (!code || !games[code] || games[code].mode !== 'draw') return;
+    const game = games[code];
+    if (socket.data.role === 'draw-player') {
+      io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
+    } else if (socket.data.role === 'draw-host') {
+      clearTimeout(game.roundTimer);
+      io.to(code).emit('draw:host-left');
       delete games[code];
     }
   });

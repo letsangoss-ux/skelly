@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Vrai du faux — Joueur</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ÉCRAN 1 : rejoindre -->
+  <div id="screen-join" class="screen">
+    <div class="card">
+      <div class="eyebrow" style="text-align:center;display:block;">Vrai du faux</div>
+      <h1 class="title-xl" style="text-align:center;">On y va ?</h1>
+      <div class="field">
+        <label for="input-code">Code de la partie</label>
+        <input type="text" id="input-code" placeholder="Ex : X7K2Q" maxlength="6" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="input-pseudo">Ton pseudo</label>
+        <input type="text" id="input-pseudo" placeholder="Ton pseudo" maxlength="16" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Choisis ton avatar</label>
+        <div class="avatar-gallery" id="avatar-grid"></div>
+        <input type="file" id="join-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-join">Rejoindre</button>
+      </div>
+      <div class="error-msg" id="join-error"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 2 : salle d'attente -->
+  <div id="screen-wait" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <img id="wait-avatar" class="avatar-img-lg" style="margin:0 auto;" src="">
+      <h2 id="wait-pseudo" style="margin-top:14px;"></h2>
+      <p class="subtitle">La partie va bientôt commencer. Reste sur cet écran !</p>
+      <button class="change-avatar-btn" id="btn-change-avatar">Changer de photo</button>
+      <div class="avatar-picker-panel hidden" id="avatar-picker-panel">
+        <div class="avatar-gallery" id="wait-avatar-grid"></div>
+        <input type="file" id="wait-avatar-upload-input" accept="image/*" class="hidden">
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 3 : écrire ses 3 affirmations -->
+  <div id="screen-write" class="screen hidden">
+    <div class="card">
+      <div class="eyebrow" style="text-align:center;display:block;">À toi d'écrire</div>
+      <h1 class="title-xl" style="text-align:center;">2 vérités, 1 mensonge</h1>
+      <p class="subtitle" style="text-align:center;">Écris 3 phrases sur toi. Les autres devront deviner laquelle est fausse.</p>
+
+      <div class="tl-statement-row">
+        <input type="text" class="tl-statement-input" data-index="0" maxlength="100" placeholder="Affirmation A">
+        <label class="tl-lie-radio"><input type="radio" name="lie" value="0"><span>Mensonge</span></label>
+      </div>
+      <div class="tl-statement-row">
+        <input type="text" class="tl-statement-input" data-index="1" maxlength="100" placeholder="Affirmation B">
+        <label class="tl-lie-radio"><input type="radio" name="lie" value="1"><span>Mensonge</span></label>
+      </div>
+      <div class="tl-statement-row">
+        <input type="text" class="tl-statement-input" data-index="2" maxlength="100" placeholder="Affirmation C">
+        <label class="tl-lie-radio"><input type="radio" name="lie" value="2"><span>Mensonge</span></label>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-submit-statements">Envoyer</button>
+      </div>
+      <div class="error-msg" id="write-error"></div>
+      <p class="subtitle hidden" id="statements-sent-msg" style="text-align:center;">✅ Envoyées ! En attente des autres...</p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 4 : voter -->
+  <div id="screen-guess" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:600px;">
+      <div class="eyebrow">Sujet <span id="guess-progress">1 / 1</span></div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:14px; margin:10px 0 18px;">
+        <img id="guess-avatar" class="avatar-img-lg" src="">
+        <h1 class="title-xl" id="guess-pseudo" style="font-size:1.6rem;"></h1>
+      </div>
+      <p class="subtitle" style="text-align:center;">Laquelle de ces affirmations est fausse ?</p>
+      <div id="tl-guess-options" style="margin-top:16px;"></div>
+      <p class="subtitle hidden" id="guess-sent-msg" style="text-align:center;">✅ Réponse envoyée, en attente des autres...</p>
+      <p class="subtitle hidden" id="guess-own-msg" style="text-align:center;">C'est ton tour ! Les autres votent sur tes affirmations.</p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 5 : révélation -->
+  <div id="screen-reveal" class="screen hidden">
+    <div class="lobby-wrap" style="max-width:600px;">
+      <div class="eyebrow">Révélation <span id="reveal-progress"></span></div>
+      <h1 class="title-xl" style="text-align:center;" id="reveal-pseudo"></h1>
+      <div id="reveal-statements-list" style="margin-top:18px;"></div>
+      <p class="subtitle" style="text-align:center; margin-top:10px;" id="reveal-points"></p>
+    </div>
+  </div>
+
+  <!-- ÉCRAN 6 : fin -->
+  <div id="screen-end" class="screen hidden">
+    <div class="card" style="text-align:center;">
+      <div class="eyebrow">Terminé</div>
+      <h1 class="title-xl">Merci d'avoir joué !</h1>
+      <p class="subtitle" id="final-score-msg"></p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/truth-player.js"></script>
+</body>
+</html>

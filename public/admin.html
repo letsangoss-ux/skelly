@@ -33,6 +33,7 @@
           <button class="btn btn-ghost" id="btn-show-global" style="width:auto;">Classement général</button>
           <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
           <button class="btn btn-ghost" id="btn-show-uc-words" style="width:auto;">🎭 Mots Imposteur</button>
+          <button class="btn btn-ghost" id="btn-show-vote" style="width:auto;">🗳️ Vote « Sort d'Alan »</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
@@ -61,6 +62,21 @@
         <button class="btn btn-ghost" id="btn-back-dashboard-2" style="width:auto;">← Retour</button>
       </div>
       <div id="global-list"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : résultats du vote "Sort d'Alan" -->
+  <div id="screen-vote" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">Vote spécial</div><h1 class="title-xl">Le sort d'Alan</h1></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-refresh-vote" style="width:auto;">↻ Actualiser</button>
+          <button class="btn btn-ghost" id="btn-back-dashboard-4" style="width:auto;">← Retour</button>
+        </div>
+      </div>
+      <p class="subtitle" id="vote-total-msg"></p>
+      <div id="vote-results-list" style="margin-top:20px;"></div>
     </div>
   </div>
 
