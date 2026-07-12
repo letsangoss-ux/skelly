@@ -1474,6 +1474,21 @@ function tlEndGame(game) {
   io.to(game.code).emit('tl:game-over', { leaderboard });
 }
 
+// Remet la partie en salle d'attente (même code, mêmes joueurs, scores à zéro)
+// pour permettre de relancer une manche sans recréer de lobby.
+function tlResetGame(game) {
+  game.state = 'lobby';
+  game.statements = {};
+  game.lieIndex = {};
+  game.order = [];
+  game.subjectIndex = 0;
+  game.currentGuesses = {};
+  game.lastGuessPhase = null;
+  game.lastReveal = null;
+  game.finalLeaderboard = null;
+  Object.values(game.players).forEach((p) => { p.score = 0; });
+}
+
 io.on('connection', (socket) => {
   socket.on('tl:create-game', () => {
     const code = generateCode();
@@ -1614,6 +1629,13 @@ io.on('connection', (socket) => {
     delete games[game.code];
   });
 
+  socket.on('tl:host-restart', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'truthlie' || game.state !== 'ended') return;
+    tlResetGame(game);
+    io.to(game.code).emit('tl:game-reset', { players: tlPlayersForHost(game) });
+  });
+
   socket.on('disconnect', () => {
     const code = socket.data.code;
     if (!code || !games[code] || games[code].mode !== 'truthlie') return;
@@ -1727,6 +1749,26 @@ function drawEndGame(game) {
     .map((p) => ({ pseudo: p.pseudo, avatar: p.avatar, score: p.score }));
   game.finalLeaderboard = leaderboard;
   io.to(game.code).emit('draw:game-over', { leaderboard });
+}
+
+// Remet la partie en salle d'attente (même code, mêmes joueurs, scores à zéro)
+// pour permettre de relancer une manche sans recréer de lobby.
+function drawResetGame(game) {
+  clearTimeout(game.roundTimer);
+  game.state = 'lobby';
+  game.order = [];
+  game.roundIndex = 0;
+  game.drawerSocketId = null;
+  game.currentWord = null;
+  game.guessesThisRound = {};
+  game.correctOrder = [];
+  game.roundStartedAt = null;
+  game.roundDuration = 75000;
+  game.usedWords = new Set();
+  game.roundTimer = null;
+  game.lastRoundEnd = null;
+  game.finalLeaderboard = null;
+  Object.values(game.players).forEach((p) => { p.score = 0; });
 }
 
 io.on('connection', (socket) => {
@@ -1876,6 +1918,13 @@ io.on('connection', (socket) => {
     clearTimeout(game.roundTimer);
     io.to(game.code).emit('draw:game-ended');
     delete games[game.code];
+  });
+
+  socket.on('draw:host-restart', () => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'ended') return;
+    drawResetGame(game);
+    io.to(game.code).emit('draw:game-reset', { players: drawPlayersForHost(game) });
   });
 
   socket.on('disconnect', () => {

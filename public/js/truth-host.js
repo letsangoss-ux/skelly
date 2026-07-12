@@ -162,3 +162,21 @@ document.getElementById('btn-end-game').addEventListener('click', () => {
   socket.emit('tl:end-game');
   window.location.href = '/index.html';
 });
+
+// ---------- Rejouer (retour au lobby, sans recréer de partie) ----------
+document.getElementById('btn-replay').addEventListener('click', () => socket.emit('tl:host-restart'));
+
+socket.on('tl:game-reset', ({ players }) => {
+  document.getElementById('player-count-num').textContent = players.length;
+  const pills = document.getElementById('player-pills');
+  pills.innerHTML = '';
+  players.forEach((p) => {
+    const el = document.createElement('div');
+    el.className = 'player-pill';
+    el.innerHTML = `<img class="avatar-img-sm" src="${p.avatar}"> ${p.pseudo}`;
+    pills.appendChild(el);
+  });
+  const errEl = document.getElementById('lobby-error');
+  if (errEl) errEl.textContent = '';
+  showScreen('lobby');
+});

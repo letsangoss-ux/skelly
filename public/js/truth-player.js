@@ -230,6 +230,11 @@ socket.on('tl:game-over', ({ leaderboard }) => {
   showScreen('end');
 });
 
+// ---------- Rejouer (l'hôte relance une nouvelle partie) ----------
+socket.on('tl:game-reset', () => {
+  showScreen('wait');
+});
+
 socket.on('tl:game-ended', () => {
   alert("La partie est terminée. Merci d'avoir joué !");
   window.location.href = '/index.html';
