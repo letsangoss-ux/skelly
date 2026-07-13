@@ -130,6 +130,8 @@ document.getElementById('btn-change-avatar').addEventListener('click', () => {
 // ---------- Dessin (vue dessinateur) ----------
 const myCanvas = document.getElementById('my-canvas');
 const myCtx = myCanvas.getContext('2d');
+const overlayCanvas = document.getElementById('my-canvas-overlay');
+const overlayCtx = overlayCanvas.getContext('2d');
 const viewCanvas = document.getElementById('view-canvas');
 const viewCtx = viewCanvas.getContext('2d');
 function drawViewSegment({ x0, y0, x1, y1, color, size }) {
@@ -159,9 +161,12 @@ const COLORS = [
 const SIZES = [{ label: 'XS', value: 0.003 }, { label: 'S', value: 0.006 }, { label: 'M', value: 0.014 }, { label: 'L', value: 0.026 }, { label: 'XL', value: 0.045 }];
 let currentColor = COLORS[0];
 let currentSize = SIZES[2].value;
-let currentTool = 'brush'; // 'brush' | 'eraser' | 'fill'
+let currentTool = 'brush'; // 'brush' | 'eraser' | 'fill' | 'line' | 'rect' | 'circle'
+const SHAPE_TOOLS = ['line', 'rect', 'circle'];
 let drawing = false;
 let lastPoint = null;
+let shapeStart = null;
+let shapeCurrent = null;
 let strokeHistory = []; // liste de traits (chacun = tableau de segments), pour "Annuler"
 let currentStroke = null;
 
@@ -223,9 +228,28 @@ function buildToolRow() {
   undoBtn.addEventListener('click', undoLastStroke);
   row.appendChild(undoBtn);
 }
+function buildShapeRow() {
+  const row = document.getElementById('draw-shape-row');
+  if (!row) return;
+  row.innerHTML = '';
+  const shapes = [
+    { id: 'line', label: '📏 Ligne' },
+    { id: 'rect', label: '▭ Rectangle' },
+    { id: 'circle', label: '⬭ Cercle' },
+  ];
+  shapes.forEach((t) => {
+    const btn = document.createElement('div');
+    btn.className = 'draw-tool-btn' + (t.id === currentTool ? ' selected' : '');
+    btn.dataset.tool = t.id;
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => { currentTool = t.id; updateToolButtons(); });
+    row.appendChild(btn);
+  });
+}
 buildColorRow();
 buildSizeRow();
 buildToolRow();
+buildShapeRow();
 
 function fillCanvasBg() {
   myCtx.fillStyle = CANVAS_BG;
@@ -286,41 +310,83 @@ function floodFill(startX, startY, fillColorHex) {
 }
 
 function pointerPos(e) {
-  const rect = myCanvas.getBoundingClientRect();
-  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const rect = overlayCanvas.getBoundingClientRect();
+  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || null;
+  const clientX = t ? t.clientX : e.clientX;
+  const clientY = t ? t.clientY : e.clientY;
   return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
 }
-function localSegment(p0, p1, color, size) {
-  myCtx.strokeStyle = color;
-  myCtx.lineWidth = size * myCanvas.width;
-  myCtx.lineCap = 'round';
-  myCtx.lineJoin = 'round';
-  myCtx.beginPath();
-  myCtx.moveTo(p0.x * myCanvas.width, p0.y * myCanvas.height);
-  myCtx.lineTo(p1.x * myCanvas.width, p1.y * myCanvas.height);
-  myCtx.stroke();
+function drawSegmentOnCanvas(ctx, canvasEl, p0, p1, color, size) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = size * canvasEl.width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p0.x * canvasEl.width, p0.y * canvasEl.height);
+  ctx.lineTo(p1.x * canvasEl.width, p1.y * canvasEl.height);
+  ctx.stroke();
+}
+function localSegment(p0, p1, color, size) { drawSegmentOnCanvas(myCtx, myCanvas, p0, p1, color, size); }
+
+// Calcule les segments (points normalisés 0-1) qui composent une forme entre deux coins p0/p1
+function computeShapeSegments(tool, p0, p1) {
+  if (tool === 'line') return [{ x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y }];
+  if (tool === 'rect') {
+    return [
+      { x0: p0.x, y0: p0.y, x1: p1.x, y1: p0.y },
+      { x0: p1.x, y0: p0.y, x1: p1.x, y1: p1.y },
+      { x0: p1.x, y0: p1.y, x1: p0.x, y1: p1.y },
+      { x0: p0.x, y0: p1.y, x1: p0.x, y1: p0.y },
+    ];
+  }
+  if (tool === 'circle') {
+    const cx = (p0.x + p1.x) / 2, cy = (p0.y + p1.y) / 2;
+    const rx = Math.abs(p1.x - p0.x) / 2, ry = Math.abs(p1.y - p0.y) / 2;
+    const N = 32;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      pts.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+    }
+    const segs = [];
+    for (let i = 0; i < N; i++) segs.push({ x0: pts[i].x, y0: pts[i].y, x1: pts[i + 1].x, y1: pts[i + 1].y });
+    return segs;
+  }
+  return [];
 }
 function activeColor() { return currentTool === 'eraser' ? CANVAS_BG : currentColor; }
 function activeSize() { return currentTool === 'eraser' ? Math.max(currentSize, 0.03) : currentSize; }
 
 function startDraw(e) {
   e.preventDefault();
+  const p = pointerPos(e);
   if (currentTool === 'fill') {
-    const p = pointerPos(e);
     floodFill(p.x, p.y, currentColor);
     strokeHistory.push([{ x0: p.x, y0: p.y, x1: p.x, y1: p.y, color: currentColor, size: 0, fill: true }]);
     syncSnapshotToOthers();
     return;
   }
+  if (SHAPE_TOOLS.includes(currentTool)) {
+    shapeStart = p;
+    shapeCurrent = p;
+    drawing = true;
+    return;
+  }
   drawing = true;
-  lastPoint = pointerPos(e);
+  lastPoint = p;
   currentStroke = [];
 }
 function moveDraw(e) {
   if (!drawing) return;
   e.preventDefault();
   const p = pointerPos(e);
+  if (SHAPE_TOOLS.includes(currentTool)) {
+    shapeCurrent = p;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    const segs = computeShapeSegments(currentTool, shapeStart, shapeCurrent);
+    segs.forEach((s) => drawSegmentOnCanvas(overlayCtx, overlayCanvas, { x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 }, currentColor, currentSize));
+    return;
+  }
   const color = activeColor();
   const size = activeSize();
   localSegment(lastPoint, p, color, size);
@@ -330,18 +396,39 @@ function moveDraw(e) {
   lastPoint = p;
 }
 function endDraw() {
-  if (drawing && currentStroke && currentStroke.length) strokeHistory.push(currentStroke);
+  if (!drawing) return;
+  if (SHAPE_TOOLS.includes(currentTool)) {
+    if (shapeStart && shapeCurrent) {
+      const segs = computeShapeSegments(currentTool, shapeStart, shapeCurrent);
+      const color = currentColor;
+      const size = currentSize;
+      const stroke = [];
+      segs.forEach((s) => {
+        const seg = { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, color, size };
+        localSegment({ x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 }, color, size);
+        socket.emit('draw:stroke', seg);
+        stroke.push(seg);
+      });
+      if (stroke.length) strokeHistory.push(stroke);
+    }
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    shapeStart = null;
+    shapeCurrent = null;
+    drawing = false;
+    return;
+  }
+  if (currentStroke && currentStroke.length) strokeHistory.push(currentStroke);
   drawing = false;
   lastPoint = null;
   currentStroke = null;
 }
 
-myCanvas.addEventListener('mousedown', startDraw);
-myCanvas.addEventListener('mousemove', moveDraw);
+overlayCanvas.addEventListener('mousedown', startDraw);
+overlayCanvas.addEventListener('mousemove', moveDraw);
 window.addEventListener('mouseup', endDraw);
-myCanvas.addEventListener('touchstart', startDraw, { passive: false });
-myCanvas.addEventListener('touchmove', moveDraw, { passive: false });
-myCanvas.addEventListener('touchend', endDraw);
+overlayCanvas.addEventListener('touchstart', startDraw, { passive: false });
+overlayCanvas.addEventListener('touchmove', moveDraw, { passive: false });
+overlayCanvas.addEventListener('touchend', endDraw);
 
 document.getElementById('btn-clear-canvas').addEventListener('click', () => {
   strokeHistory = [];
@@ -362,9 +449,13 @@ socket.on('draw:round-started', (data) => {
     strokeHistory = [];
     myCtx.clearRect(0, 0, myCanvas.width, myCanvas.height);
     fillCanvasBg();
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    shapeStart = null;
+    shapeCurrent = null;
     currentTool = 'brush';
     updateToolButtons();
     document.getElementById('draw-word').textContent = data.word;
+    document.getElementById('drawer-guess-feed').innerHTML = '';
     showScreen('draw');
   } else {
     viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height);
@@ -396,8 +487,8 @@ socket.on('draw:you-found-it', () => {
   document.getElementById('guess-input').disabled = true;
 });
 socket.on('draw:guess-correct', ({ pseudo, rank }) => {
-  if (iAmDrawer) return;
-  const feed = document.getElementById('guess-feed');
+  const feed = document.getElementById(iAmDrawer ? 'drawer-guess-feed' : 'guess-feed');
+  if (!feed) return;
   const row = document.createElement('div');
   row.className = 'draw-feed-row correct';
   row.textContent = `✅ ${pseudo} a trouvé !`;
@@ -405,8 +496,8 @@ socket.on('draw:guess-correct', ({ pseudo, rank }) => {
   feed.scrollTop = feed.scrollHeight;
 });
 socket.on('draw:guess-wrong', ({ pseudo, text }) => {
-  if (iAmDrawer) return;
-  const feed = document.getElementById('guess-feed');
+  const feed = document.getElementById(iAmDrawer ? 'drawer-guess-feed' : 'guess-feed');
+  if (!feed) return;
   const row = document.createElement('div');
   row.className = 'draw-feed-row';
   row.textContent = `${pseudo} : ${text}`;

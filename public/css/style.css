@@ -1285,6 +1285,7 @@ textarea.anecdote-input:focus { border-color: var(--gold); }
 }
 
 .draw-canvas-wrap {
+  position: relative;
   width: 100%;
   max-width: 640px;
   aspect-ratio: 4 / 3;
@@ -1295,7 +1296,10 @@ textarea.anecdote-input:focus { border-color: var(--gold); }
   box-shadow: 0 20px 50px rgba(0,0,0,0.35);
   touch-action: none;
 }
-.draw-canvas-wrap canvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.draw-canvas-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+#my-canvas { cursor: crosshair; }
+#my-canvas-overlay { pointer-events: auto; cursor: crosshair; }
+#view-canvas { pointer-events: none; }
 
 .draw-toolbar {
   display: flex;
@@ -1362,6 +1366,14 @@ textarea.anecdote-input:focus { border-color: var(--gold); }
   background: rgba(62,97,82,0.18);
   font-weight: 700;
 }
+.draw-feed-dark {
+  background: #0d0c0a;
+  border: 1px solid rgba(198,166,100,0.25);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.draw-feed-dark .draw-feed-row { background: rgba(255,255,255,0.05); color: #e8e0d0; }
+.draw-feed-dark .draw-feed-row.correct { background: rgba(198,166,100,0.15); color: var(--gold); }
 
 /* ---------- ACCUEIL — flux en 2 étapes (rôle puis jeu) ---------- */
 .home-role-choice {
