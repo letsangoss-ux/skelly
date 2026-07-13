@@ -211,6 +211,26 @@ app.delete('/api/admin/undercover-words/:id', requireAdmin, (req, res) => {
 
 app.get('/api/admin/history', requireAdmin, (req, res) => res.json(loadHistory()));
 
+// Vue secrète admin : liste des parties de dessin en cours + le mot actuel de chaque partie.
+// Protégée par le même mot de passe admin que le reste du panneau — invisible pour les joueurs/l'animateur.
+app.get('/api/admin/draw-games', requireAdmin, (req, res) => {
+  const active = Object.values(games)
+    .filter((g) => g.mode === 'draw')
+    .map((g) => {
+      const drawer = g.players[g.drawerSocketId];
+      return {
+        code: g.code,
+        state: g.state,
+        playersCount: Object.keys(g.players).length,
+        round: g.state === 'drawing' ? g.roundIndex + 1 : null,
+        totalRounds: g.order.length || null,
+        currentWord: g.currentWord || null,
+        drawerPseudo: drawer ? drawer.pseudo : null,
+      };
+    });
+  res.json({ games: active });
+});
+
 app.get('/api/admin/global-leaderboard', requireAdmin, (req, res) => {
   const history = loadHistory();
   const stats = {}; // pseudo -> { wins, gamesPlayed, totalPoints }
@@ -1661,7 +1681,18 @@ const DRAW_WORDS = [
   'Astronaute', 'Chameau', 'Baleine', 'Tornade', 'Sapin de Noël', 'Piano', 'Aquarium', 'Cerf-volant', 'Boussole', 'Igloo',
   'Moulin à vent', 'Champignon', 'Escargot', 'Toboggan', 'Fauteuil', 'Horloge', 'Kangourou', 'Labyrinthe', 'Méduse', 'Nuage',
   'Ovni', 'Perroquet', 'Requin', 'Tracteur', 'Ukulélé', 'Voilier', 'Zèbre', 'Croissant', 'Camion de pompier', 'Montagnes russes',
-  'Hérisson', 'Éléphant', 'Sous-marin', 'Cheminée', 'Boussole', 'Chapeau de sorcière', 'Chevalier', 'Momie', 'Sablier', 'Trampoline',
+  'Hérisson', 'Éléphant', 'Sous-marin', 'Cheminée', 'Chapeau de sorcière', 'Chevalier', 'Momie', 'Sablier', 'Trampoline',
+  'Chat', 'Chien', 'Lion', 'Ours', 'Panda', 'Loup', 'Renard', 'Écureuil', 'Chauve-souris', 'Araignée',
+  'Papillon', 'Abeille', 'Grenouille', 'Tortue', 'Crabe', 'Poulpe', 'Flamant rose', 'Paon', 'Hibou', 'Cygne',
+  'Yeti', 'Loup-garou', 'Vampire', 'Extraterrestre', 'Zombie', 'Sorcière', 'Génie', 'Ange', 'Diable', 'Fée',
+  'Hamburger', 'Frites', "Gâteau d'anniversaire", 'Barbe à papa', 'Crêpe', 'Fromage', 'Pomme', 'Banane', 'Pastèque', 'Popcorn',
+  'Donut', 'Cupcake', 'Baguette', 'Raclette', 'Fondue', 'Churros', 'Tacos', 'Bubble tea', 'Miel', 'Chocolat chaud',
+  'Lampe magique', 'Clé', 'Cadenas', 'Miroir', 'Échelle', 'Valise', 'Pont', 'Phare', 'Tente', 'Cabane dans les arbres',
+  'Bibliothèque', 'Ferme', 'Cirque', 'Piscine', 'Marché', 'Cinéma', 'Bureau', 'École', 'Hôpital', 'Aéroport',
+  'Cowboy', 'Ninja', 'Super-héros', 'Chef cuisinier', 'Pompier', 'Policier', 'Docteur', 'Magicien', 'Clown', 'Roi',
+  'Reine', 'Princesse', 'Espion', 'Détective', 'Scientifique', 'Bûcheron', 'Jardinier', 'Musicien', 'Danseur', 'Athlète',
+  'Arc-en-ciel', 'Éclair', 'Cascade', 'Désert', 'Île déserte', 'Forêt', 'Glacier', 'Coucher de soleil', 'Éclipse', 'Étoile filante',
+  'Ballon de foot', 'Skateboard', 'Ski', 'Surf', 'Bowling', 'Yoga', 'Corde à sauter', 'Boxe', 'Escalade', 'Pêche',
 ];
 
 function drawPlayersForHost(game) {
@@ -1875,6 +1906,15 @@ io.on('connection', (socket) => {
     if (!game || game.mode !== 'draw' || game.state !== 'drawing') return;
     if (socket.id !== game.drawerSocketId) return;
     socket.to(game.code).emit('draw:clear');
+  });
+
+  // Resynchronise le tableau des autres (image complète) après un remplissage ou un "annuler"
+  socket.on('draw:sync', ({ dataUrl }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw' || game.state !== 'drawing') return;
+    if (socket.id !== game.drawerSocketId) return;
+    if (typeof dataUrl !== 'string' || dataUrl.length > 2_000_000) return;
+    socket.to(game.code).emit('draw:sync', { dataUrl });
   });
 
   socket.on('draw:guess', ({ text }) => {

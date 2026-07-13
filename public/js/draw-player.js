@@ -143,14 +143,27 @@ function drawViewSegment({ x0, y0, x1, y1, color, size }) {
   viewCtx.stroke();
 }
 socket.on('draw:stroke', (data) => drawViewSegment(data));
-socket.on('draw:clear', () => viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height));
+socket.on('draw:clear', () => { viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height); viewCtx.fillStyle = '#F8F3EA'; viewCtx.fillRect(0, 0, viewCanvas.width, viewCanvas.height); });
+socket.on('draw:sync', ({ dataUrl }) => {
+  const img = new Image();
+  img.onload = () => { viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height); viewCtx.drawImage(img, 0, 0, viewCanvas.width, viewCanvas.height); };
+  img.src = dataUrl;
+});
 
-const COLORS = ['#16130F', '#C6A664', '#8C3B3B', '#3E6152', '#3A5A78', '#F8F3EA'];
-const SIZES = [{ label: 'S', value: 0.006 }, { label: 'M', value: 0.014 }, { label: 'L', value: 0.026 }];
+const CANVAS_BG = '#F8F3EA';
+const COLORS = [
+  '#16130F', '#FFFFFF', '#8C3B3B', '#C6A664', '#3E6152', '#3A5A78',
+  '#D94F4F', '#E8963C', '#E8D24C', '#6FA85C', '#4C9BE8', '#7C5CC4',
+  '#C45CA0', '#8A5A3A', '#B0B0B0', CANVAS_BG,
+];
+const SIZES = [{ label: 'XS', value: 0.003 }, { label: 'S', value: 0.006 }, { label: 'M', value: 0.014 }, { label: 'L', value: 0.026 }, { label: 'XL', value: 0.045 }];
 let currentColor = COLORS[0];
-let currentSize = SIZES[1].value;
+let currentSize = SIZES[2].value;
+let currentTool = 'brush'; // 'brush' | 'eraser' | 'fill'
 let drawing = false;
 let lastPoint = null;
+let strokeHistory = []; // liste de traits (chacun = tableau de segments), pour "Annuler"
+let currentStroke = null;
 
 function buildColorRow() {
   const row = document.getElementById('draw-color-row');
@@ -161,6 +174,8 @@ function buildColorRow() {
     dot.style.background = c;
     dot.addEventListener('click', () => {
       currentColor = c;
+      if (currentTool === 'eraser') currentTool = 'brush';
+      updateToolButtons();
       row.querySelectorAll('.draw-color-swatch').forEach((d) => d.classList.remove('selected'));
       dot.classList.add('selected');
     });
@@ -182,8 +197,93 @@ function buildSizeRow() {
     row.appendChild(btn);
   });
 }
+function updateToolButtons() {
+  document.querySelectorAll('.draw-tool-btn').forEach((b) => b.classList.toggle('selected', b.dataset.tool === currentTool));
+}
+function buildToolRow() {
+  const row = document.getElementById('draw-tool-row');
+  if (!row) return;
+  row.innerHTML = '';
+  const tools = [
+    { id: 'brush', label: '🖌️ Pinceau' },
+    { id: 'eraser', label: '🧽 Gomme' },
+    { id: 'fill', label: '🪣 Remplir' },
+  ];
+  tools.forEach((t) => {
+    const btn = document.createElement('div');
+    btn.className = 'draw-tool-btn' + (t.id === currentTool ? ' selected' : '');
+    btn.dataset.tool = t.id;
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => { currentTool = t.id; updateToolButtons(); });
+    row.appendChild(btn);
+  });
+  const undoBtn = document.createElement('div');
+  undoBtn.className = 'draw-tool-btn';
+  undoBtn.textContent = '↩️ Annuler';
+  undoBtn.addEventListener('click', undoLastStroke);
+  row.appendChild(undoBtn);
+}
 buildColorRow();
 buildSizeRow();
+buildToolRow();
+
+function fillCanvasBg() {
+  myCtx.fillStyle = CANVAS_BG;
+  myCtx.fillRect(0, 0, myCanvas.width, myCanvas.height);
+}
+
+function redrawFromHistory() {
+  myCtx.clearRect(0, 0, myCanvas.width, myCanvas.height);
+  fillCanvasBg();
+  strokeHistory.forEach((stroke) => {
+    stroke.forEach((seg) => localSegment({ x: seg.x0, y: seg.y0 }, { x: seg.x1, y: seg.y1 }, seg.color, seg.size));
+  });
+}
+
+function syncSnapshotToOthers() {
+  try { socket.emit('draw:sync', { dataUrl: myCanvas.toDataURL('image/png') }); } catch (e) { /* ignore */ }
+}
+
+function undoLastStroke() {
+  if (!iAmDrawer || strokeHistory.length === 0) return;
+  strokeHistory.pop();
+  redrawFromHistory();
+  syncSnapshotToOthers();
+}
+
+// Remplissage façon "seau de peinture" (flood fill) sur le canvas du dessinateur
+function floodFill(startX, startY, fillColorHex) {
+  const w = myCanvas.width, h = myCanvas.height;
+  const imgData = myCtx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const toRgb = (hex) => {
+    const v = hex.replace('#', '');
+    const n = parseInt(v.length === 3 ? v.split('').map((c) => c + c).join('') : v, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [fr, fg, fb] = toRgb(fillColorHex);
+  const idx = (x, y) => (y * w + x) * 4;
+  const sx = Math.floor(startX * w), sy = Math.floor(startY * h);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return;
+  const startIdx = idx(sx, sy);
+  const targetR = data[startIdx], targetG = data[startIdx + 1], targetB = data[startIdx + 2], targetA = data[startIdx + 3];
+  if (targetR === fr && targetG === fg && targetB === fb) return;
+  const matches = (i) => Math.abs(data[i] - targetR) < 20 && Math.abs(data[i + 1] - targetG) < 20 && Math.abs(data[i + 2] - targetB) < 20 && Math.abs(data[i + 3] - targetA) < 20;
+  const stack = [[sx, sy]];
+  const visited = new Uint8Array(w * h);
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const vIdx = y * w + x;
+    if (visited[vIdx]) continue;
+    const i = idx(x, y);
+    if (!matches(i)) continue;
+    visited[vIdx] = 1;
+    data[i] = fr; data[i + 1] = fg; data[i + 2] = fb; data[i + 3] = 255;
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+  myCtx.putImageData(imgData, 0, 0);
+}
 
 function pointerPos(e) {
   const rect = myCanvas.getBoundingClientRect();
@@ -191,9 +291,9 @@ function pointerPos(e) {
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
   return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
 }
-function localSegment(p0, p1) {
-  myCtx.strokeStyle = currentColor;
-  myCtx.lineWidth = currentSize * myCanvas.width;
+function localSegment(p0, p1, color, size) {
+  myCtx.strokeStyle = color;
+  myCtx.lineWidth = size * myCanvas.width;
   myCtx.lineCap = 'round';
   myCtx.lineJoin = 'round';
   myCtx.beginPath();
@@ -201,20 +301,40 @@ function localSegment(p0, p1) {
   myCtx.lineTo(p1.x * myCanvas.width, p1.y * myCanvas.height);
   myCtx.stroke();
 }
+function activeColor() { return currentTool === 'eraser' ? CANVAS_BG : currentColor; }
+function activeSize() { return currentTool === 'eraser' ? Math.max(currentSize, 0.03) : currentSize; }
+
 function startDraw(e) {
   e.preventDefault();
+  if (currentTool === 'fill') {
+    const p = pointerPos(e);
+    floodFill(p.x, p.y, currentColor);
+    strokeHistory.push([{ x0: p.x, y0: p.y, x1: p.x, y1: p.y, color: currentColor, size: 0, fill: true }]);
+    syncSnapshotToOthers();
+    return;
+  }
   drawing = true;
   lastPoint = pointerPos(e);
+  currentStroke = [];
 }
 function moveDraw(e) {
   if (!drawing) return;
   e.preventDefault();
   const p = pointerPos(e);
-  localSegment(lastPoint, p);
-  socket.emit('draw:stroke', { x0: lastPoint.x, y0: lastPoint.y, x1: p.x, y1: p.y, color: currentColor, size: currentSize });
+  const color = activeColor();
+  const size = activeSize();
+  localSegment(lastPoint, p, color, size);
+  const seg = { x0: lastPoint.x, y0: lastPoint.y, x1: p.x, y1: p.y, color, size };
+  socket.emit('draw:stroke', seg);
+  if (currentStroke) currentStroke.push(seg);
   lastPoint = p;
 }
-function endDraw() { drawing = false; lastPoint = null; }
+function endDraw() {
+  if (drawing && currentStroke && currentStroke.length) strokeHistory.push(currentStroke);
+  drawing = false;
+  lastPoint = null;
+  currentStroke = null;
+}
 
 myCanvas.addEventListener('mousedown', startDraw);
 myCanvas.addEventListener('mousemove', moveDraw);
@@ -224,7 +344,9 @@ myCanvas.addEventListener('touchmove', moveDraw, { passive: false });
 myCanvas.addEventListener('touchend', endDraw);
 
 document.getElementById('btn-clear-canvas').addEventListener('click', () => {
+  strokeHistory = [];
   myCtx.clearRect(0, 0, myCanvas.width, myCanvas.height);
+  fillCanvasBg();
   socket.emit('draw:clear');
 });
 
@@ -237,11 +359,17 @@ socket.on('draw:round-started', (data) => {
   document.getElementById('found-msg').classList.add('hidden');
   foundThisRound = false;
   if (iAmDrawer) {
+    strokeHistory = [];
     myCtx.clearRect(0, 0, myCanvas.width, myCanvas.height);
+    fillCanvasBg();
+    currentTool = 'brush';
+    updateToolButtons();
     document.getElementById('draw-word').textContent = data.word;
     showScreen('draw');
   } else {
     viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height);
+    viewCtx.fillStyle = '#F8F3EA';
+    viewCtx.fillRect(0, 0, viewCanvas.width, viewCanvas.height);
     document.getElementById('guess-drawer-pseudo').textContent = data.drawerPseudo || '';
     document.getElementById('guess-word-hint').textContent = data.wordLength ? Array(data.wordLength).fill('_').join(' ') : '';
     document.getElementById('guess-input').value = '';

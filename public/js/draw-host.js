@@ -51,7 +51,7 @@ socket.on('draw:error', ({ message }) => {
 // ---------- Dessin en cours ----------
 const canvas = document.getElementById('draw-canvas');
 const ctx = canvas.getContext('2d');
-function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#F8F3EA'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
 function drawSegment({ x0, y0, x1, y1, color, size }) {
   ctx.strokeStyle = color;
   ctx.lineWidth = size * canvas.width;
@@ -64,6 +64,11 @@ function drawSegment({ x0, y0, x1, y1, color, size }) {
 }
 socket.on('draw:stroke', (data) => drawSegment(data));
 socket.on('draw:clear', () => clearCanvas());
+socket.on('draw:sync', ({ dataUrl }) => {
+  const img = new Image();
+  img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); };
+  img.src = dataUrl;
+});
 
 function startTimer(duration) {
   clearInterval(timerInterval);

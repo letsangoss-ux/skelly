@@ -34,6 +34,7 @@
           <button class="btn btn-ghost" id="btn-show-history" style="width:auto;">Historique</button>
           <button class="btn btn-ghost" id="btn-show-uc-words" style="width:auto;">🎭 Mots Imposteur</button>
           <button class="btn btn-ghost" id="btn-show-vote" style="width:auto;">🗳️ Vote « Sort d'Alan »</button>
+          <button class="btn btn-ghost" id="btn-show-draw-words" style="width:auto;">🤫 Mots du Dessin (secret)</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
@@ -77,6 +78,21 @@
       </div>
       <p class="subtitle" id="vote-total-msg"></p>
       <div id="vote-results-list" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : vue secrète du mode Dessin (mots en cours) -->
+  <div id="screen-draw-words" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">🤫 Vue secrète</div><h1 class="title-xl">Parties de dessin en cours</h1></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-refresh-draw-words" style="width:auto;">↻ Actualiser</button>
+          <button class="btn btn-ghost" id="btn-back-dashboard-5" style="width:auto;">← Retour</button>
+        </div>
+      </div>
+      <div class="info-banner" style="text-align:left;">👀 Cette vue n'est visible que par toi (admin connecté). Elle affiche en direct le mot que chaque dessinateur est en train de faire deviner, partie par partie. Personne d'autre n'y a accès.</div>
+      <div id="draw-words-list" style="margin-top:20px;"></div>
     </div>
   </div>
 

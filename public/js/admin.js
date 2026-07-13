@@ -11,6 +11,7 @@ const screens = {
   editor: document.getElementById('screen-editor'),
   ucWords: document.getElementById('screen-uc-words'),
   vote: document.getElementById('screen-vote'),
+  drawWords: document.getElementById('screen-draw-words'),
 };
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
@@ -58,6 +59,7 @@ else showScreen('login');
 
 // ---------- Tableau de bord ----------
 async function loadDashboard() {
+  if (typeof stopDrawWordsAutoRefresh === 'function') stopDrawWordsAutoRefresh();
   const res = await api('/api/admin/quizzes');
   const quizzes = await res.json();
   const list = document.getElementById('quiz-list');
@@ -199,6 +201,51 @@ async function loadVoteResults() {
     });
   }
   showScreen('vote');
+}
+
+// ---------- Vue secrète "Mots du Dessin" (visible admin uniquement) ----------
+let drawWordsInterval = null;
+document.getElementById('btn-show-draw-words').addEventListener('click', () => { loadDrawWords(); startDrawWordsAutoRefresh(); });
+document.getElementById('btn-refresh-draw-words').addEventListener('click', loadDrawWords);
+document.getElementById('btn-back-dashboard-5').addEventListener('click', () => { stopDrawWordsAutoRefresh(); loadDashboard(); });
+
+function startDrawWordsAutoRefresh() {
+  stopDrawWordsAutoRefresh();
+  drawWordsInterval = setInterval(loadDrawWords, 4000);
+}
+function stopDrawWordsAutoRefresh() {
+  if (drawWordsInterval) { clearInterval(drawWordsInterval); drawWordsInterval = null; }
+}
+
+async function loadDrawWords() {
+  let data;
+  try {
+    const res = await api('/api/admin/draw-games');
+    data = await res.json();
+  } catch (e) { return; }
+  const list = document.getElementById('draw-words-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!data.games || data.games.length === 0) {
+    list.innerHTML = '<p class="subtitle">Aucune partie de dessin en cours.</p>';
+  } else {
+    data.games.forEach((g) => {
+      const row = document.createElement('div');
+      row.className = 'question-card';
+      const stateLabel = g.state === 'drawing' ? `Manche ${g.round}/${g.totalRounds} — ${escapeHtml(g.drawerPseudo || '?')} dessine` : (g.state === 'lobby' ? 'En attente dans le lobby' : g.state);
+      row.innerHTML = `
+        <div class="qc-body" style="flex-direction:column; align-items:stretch; gap:6px;">
+          <div style="display:flex; justify-content:space-between; gap:10px;">
+            <span>Partie <strong>${escapeHtml(g.code)}</strong> — ${g.playersCount} joueur(s)</span>
+          </div>
+          <div class="subtitle" style="margin:0;">${stateLabel}</div>
+          ${g.currentWord ? `<div style="font-size:1.1rem;"><strong>Mot en cours :</strong> ${escapeHtml(g.currentWord)}</div>` : ''}
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  }
+  showScreen('drawWords');
 }
 
 // ---------- Classement général ----------
