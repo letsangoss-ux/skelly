@@ -35,7 +35,49 @@ function saveHistory(history) { fs.writeFileSync(HISTORY_FILE, JSON.stringify(hi
 function loadVotes() { return fs.existsSync(VOTES_FILE) ? JSON.parse(fs.readFileSync(VOTES_FILE, 'utf-8')) : []; }
 function saveVotes(votes) { fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2)); }
 
+// ------------------------------------------------------------
+// VOTE "Destin d'Alan" — chaque invité ne peut voter qu'une fois
+// (identifié par un voterId généré côté navigateur et stocké en localStorage)
+// ------------------------------------------------------------
+const VOTE_OPTIONS = [
+  { id: 'alan', label: 'Alan reste président à vie' },
+  { id: 'oracle', label: "Oracle devient présidente jusqu'à ce que Myriam pense à Estelle" },
+  { id: 'ethan', label: "Ethan devient président jusqu'à ce qu'il reparte à Maing" },
+  { id: 'andreane', label: "Andréane devient présidente jusqu'à ce qu'elle quitte Hugo" },
+  { id: 'maxime', label: "Maxime devient président jusqu'à ce que Angel répare son œil accidenté" },
+];
+const VOTE_OPTION_IDS = new Set(VOTE_OPTIONS.map((o) => o.id));
 
+app.get('/api/vote/options', (req, res) => res.json(VOTE_OPTIONS));
+
+app.get('/api/vote/status', (req, res) => {
+  const voterId = (req.query.voterId || '').toString();
+  if (!voterId) return res.json({ voted: false });
+  const votes = loadVotes();
+  const existing = votes.find((v) => v.voterId === voterId);
+  res.json({ voted: !!existing, choice: existing ? existing.choice : null });
+});
+
+app.post('/api/vote', (req, res) => {
+  const { voterId, choice } = req.body || {};
+  if (!voterId || typeof voterId !== 'string') return res.status(400).json({ error: 'Identifiant votant manquant.' });
+  if (!VOTE_OPTION_IDS.has(choice)) return res.status(400).json({ error: 'Choix invalide.' });
+  const votes = loadVotes();
+  if (votes.some((v) => v.voterId === voterId)) return res.status(409).json({ error: 'Vous avez déjà voté.' });
+  votes.push({ voterId, choice, date: new Date().toISOString() });
+  saveVotes(votes);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/votes', requireAdmin, (req, res) => {
+  const votes = loadVotes();
+  const results = VOTE_OPTIONS.map((opt) => ({
+    id: opt.id,
+    label: opt.label,
+    count: votes.filter((v) => v.choice === opt.id).length,
+  }));
+  res.json({ total: votes.length, results });
+});
 
 // Convertit une URL publique ("/uploads/xxx.jpg" ou "/audio/xxx.mp3") en chemin réel sur le disque
 function urlToDiskPath(url) {

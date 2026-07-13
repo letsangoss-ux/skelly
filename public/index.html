@@ -8,6 +8,17 @@
 </head>
 <body>
 
+  <!-- ÉTAPE 0 : vote spécial "Le destin d'Alan" (une fois par invité) -->
+  <div id="screen-vote" class="screen hidden">
+    <div class="card" style="max-width:560px; text-align:center;">
+      <div class="eyebrow">Vote spécial</div>
+      <h1 class="title-xl" style="font-size:2rem;">Le sort d'Alan</h1>
+      <p class="subtitle" style="text-align:left;">Alan ayant été un mauvais président ces derniers jours et ayant ainsi failli à sa mission qui est de vous divertir, le choix est laissé à vous, membres de la Team Skelly. Que doit-il advenir de son rôle ?</p>
+      <div class="btn-row" id="vote-options" style="margin-top:24px;"></div>
+      <div class="error-msg" id="vote-error"></div>
+    </div>
+  </div>
+
   <!-- ÉTAPE 1 : je rejoins ou j'anime -->
   <div id="screen-role" class="screen hidden">
     <div class="home-wrap">
