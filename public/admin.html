@@ -35,6 +35,7 @@
           <button class="btn btn-ghost" id="btn-show-uc-words" style="width:auto;">🎭 Mots Imposteur</button>
           <button class="btn btn-ghost" id="btn-show-vote" style="width:auto;">🗳️ Vote « Sort d'Alan »</button>
           <button class="btn btn-ghost" id="btn-show-draw-words" style="width:auto;">🤫 Mots du Dessin (secret)</button>
+          <button class="btn btn-ghost" id="btn-show-res-words" style="width:auto;">🤫 Jeu des problèmes (secret)</button>
           <button class="btn btn-primary" id="btn-new-quiz" style="width:auto;">+ Nouveau quiz</button>
         </div>
       </div>
@@ -93,6 +94,21 @@
       </div>
       <div class="info-banner" style="text-align:left;">👀 Cette vue n'est visible que par toi (admin connecté). Elle affiche en direct le mot que chaque dessinateur est en train de faire deviner, partie par partie. Personne d'autre n'y a accès.</div>
       <div id="draw-words-list" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!-- ÉCRAN : vue secrète du jeu des problèmes (anecdotes en cours d'écriture) -->
+  <div id="screen-res-words" class="screen hidden">
+    <div class="admin-shell">
+      <div class="admin-header">
+        <div><div class="eyebrow">🤫 Vue secrète</div><h1 class="title-xl">Jeu des problèmes — parties en cours</h1></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-refresh-res-words" style="width:auto;">↻ Actualiser</button>
+          <button class="btn btn-ghost" id="btn-back-dashboard-6" style="width:auto;">← Retour</button>
+        </div>
+      </div>
+      <div class="info-banner" style="text-align:left;">👀 Cette vue n'est visible que par toi (admin connecté) — jamais sur l'écran animateur projeté. Tant qu'une partie est en phase d'écriture, tu vois chaque anecdote arriver et tu peux corriger son texte avant que les devinettes ne démarrent et ne la révèlent aux joueurs.</div>
+      <div id="res-words-list" style="margin-top:20px;"></div>
     </div>
   </div>
 

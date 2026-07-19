@@ -236,6 +236,67 @@ app.post('/api/admin/draw-games/:code/moderator', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// Vue secrète "Jeu des problèmes" (visible admin uniquement, jamais sur
+// l'écran animateur projeté) : liste les parties en cours et, pour celles en
+// phase d'écriture, les anecdotes déjà reçues afin de les relire/corriger
+// avant que les devinettes ne démarrent.
+app.get('/api/admin/resiliance-games', requireAdmin, (req, res) => {
+  const active = Object.values(games)
+    .filter((g) => g.mode === 'resiliance')
+    .map((g) => {
+      const anecdotes = g.state === 'writing'
+        ? Object.keys(g.anecdotes).map((subjectId) => {
+          const subject = g.players[subjectId];
+          const authorId = g.anecdoteAuthors[subjectId];
+          const author = authorId ? g.players[authorId] : null;
+          return {
+            subjectId,
+            subjectPseudo: subject ? subject.pseudo : '?',
+            authorPseudo: author ? author.pseudo : '?',
+            text: g.anecdotes[subjectId],
+          };
+        })
+        : [];
+      return {
+        code: g.code,
+        state: g.state,
+        playersCount: Object.keys(g.players).length,
+        round: g.state === 'guessing' ? g.round : null,
+        totalRounds: g.state === 'guessing' ? (g.order.length - 2) : null,
+        writingCount: Object.keys(g.anecdotes).length,
+        writingTotal: Object.keys(g.players).length,
+        anecdotes,
+      };
+    });
+  res.json({ games: active });
+});
+
+// Corrige le texte d'une anecdote déjà envoyée, tant que la partie est encore
+// en phase d'écriture (avant que les devinettes ne démarrent et ne révèlent
+// le texte aux joueurs). Sert à retirer tout contenu inapproprié repéré sur
+// la vue secrète ci-dessus.
+app.post('/api/admin/resiliance-games/:code/anecdote', requireAdmin, (req, res) => {
+  const game = games[(req.params.code || '').toUpperCase()];
+  if (!game || game.mode !== 'resiliance') return res.status(404).json({ error: 'Partie introuvable.' });
+  if (game.state !== 'writing') return res.status(400).json({ error: "La partie n'est plus en phase d'écriture." });
+  const { subjectId, text } = req.body || {};
+  if (!subjectId || game.anecdotes[subjectId] === undefined) return res.status(400).json({ error: 'Anecdote introuvable.' });
+  const clean = (text || '').trim().slice(0, 200);
+  if (!clean) return res.status(400).json({ error: 'Texte vide.' });
+  game.anecdotes[subjectId] = clean;
+  res.json({ ok: true });
+});
+
+// Force le passage aux devinettes depuis le tableau de bord admin (équivalent
+// du bouton "Passer aux devinettes maintenant" sur l'écran animateur).
+app.post('/api/admin/resiliance-games/:code/force-start-guessing', requireAdmin, (req, res) => {
+  const game = games[(req.params.code || '').toUpperCase()];
+  if (!game || game.mode !== 'resiliance') return res.status(404).json({ error: 'Partie introuvable.' });
+  if (game.state !== 'writing') return res.status(400).json({ error: "La partie n'est plus en phase d'écriture." });
+  resFinishWriting(game);
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/global-leaderboard', requireAdmin, (req, res) => {
   const history = loadHistory();
   const stats = {}; // pseudo -> { wins, gamesPlayed, totalPoints }
@@ -1331,46 +1392,23 @@ io.on('connection', (socket) => {
     game.anecdoteAuthors[subjectId] = socket.id;
     const count = Object.keys(game.anecdotes).length;
     const total = Object.keys(game.players).length;
-    const subject = game.players[subjectId];
-    const author = game.players[socket.id];
     io.to(game.hostSocketId).emit('res:writing-progress', { count, total });
-    // MODÉRATION : l'animateur voit chaque anecdote arriver en direct sur son
-    // panneau (comme le flux de la manche de dessin) pour pouvoir repérer et
-    // corriger tout contenu inapproprié avant que la partie ne continue.
-    io.to(game.hostSocketId).emit('res:anecdote-submitted', {
-      subjectId,
-      subjectPseudo: subject ? subject.pseudo : '?',
-      subjectAvatar: subject ? subject.avatar : '/avatars/avatar1.svg',
-      authorPseudo: author ? author.pseudo : '?',
-      text: clean,
-    });
     socket.emit('res:anecdote-received');
-    // BUGFIX/MODÉRATION : on ne bascule plus automatiquement vers les devinettes
-    // dès que tout le monde a soumis. On laisse à l'animateur une fenêtre pour
-    // relire (et au besoin corriger) les anecdotes déjà reçues avant de lancer
-    // la suite lui-même via 'res:force-start-guessing' (voir resiliance-host.js).
-    if (count >= total) io.to(game.hostSocketId).emit('res:writing-all-done');
-  });
-
-  // L'animateur peut corriger le texte d'une anecdote déjà envoyée tant que la
-  // partie est encore en phase d'écriture (avant que les devinettes ne
-  // démarrent et ne révèlent le texte aux joueurs). Sert à retirer tout
-  // contenu inapproprié repéré sur le panneau de modération.
-  socket.on('res:host-edit-anecdote', ({ subjectId, text }) => {
-    const game = games[socket.data.code];
-    if (!game || game.mode !== 'resiliance' || game.state !== 'writing') return;
-    if (socket.id !== game.hostSocketId) return;
-    if (game.anecdotes[subjectId] === undefined) return;
-    const clean = (text || '').trim().slice(0, 200);
-    if (!clean) return;
-    game.anecdotes[subjectId] = clean;
-    socket.emit('res:anecdote-edit-confirmed', { subjectId, text: clean });
+    // MODÉRATION : on ne bascule plus automatiquement vers les devinettes dès
+    // que tout le monde a soumis. Le contenu des anecdotes n'est jamais
+    // affiché sur l'écran animateur (projeté) : il n'est visible et
+    // modifiable que depuis le tableau de bord admin (voir /api/admin/
+    // resiliance-games), à l'écart de la salle — exactement comme la vue
+    // secrète "Mots du Dessin". L'animateur y décide quand lancer les
+    // devinettes via le bouton "Passer aux devinettes maintenant" (ici, sur
+    // son écran) ou depuis le tableau de bord admin.
   });
 
   socket.on('res:force-start-guessing', () => {
     const game = games[socket.data.code];
     if (game && game.mode === 'resiliance' && game.state === 'writing') resFinishWriting(game);
   });
+
 
   socket.on('res:submit-guess', ({ guessedSocketId }) => {
     const game = games[socket.data.code];

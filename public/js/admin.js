@@ -12,6 +12,7 @@ const screens = {
   ucWords: document.getElementById('screen-uc-words'),
   vote: document.getElementById('screen-vote'),
   drawWords: document.getElementById('screen-draw-words'),
+  resWords: document.getElementById('screen-res-words'),
 };
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.add('hidden'));
@@ -60,6 +61,7 @@ else showScreen('login');
 // ---------- Tableau de bord ----------
 async function loadDashboard() {
   if (typeof stopDrawWordsAutoRefresh === 'function') stopDrawWordsAutoRefresh();
+  if (typeof stopResWordsAutoRefresh === 'function') stopResWordsAutoRefresh();
   const res = await api('/api/admin/quizzes');
   const quizzes = await res.json();
   const list = document.getElementById('quiz-list');
@@ -268,6 +270,124 @@ async function loadDrawWords() {
     });
   }
   showScreen('drawWords');
+}
+
+// ---------- Vue secrète "Jeu des problèmes" (visible admin uniquement) ----------
+let resWordsInterval = null;
+document.getElementById('btn-show-res-words').addEventListener('click', () => { loadResWords(); startResWordsAutoRefresh(); });
+document.getElementById('btn-refresh-res-words').addEventListener('click', loadResWords);
+document.getElementById('btn-back-dashboard-6').addEventListener('click', () => { stopResWordsAutoRefresh(); loadDashboard(); });
+
+function startResWordsAutoRefresh() {
+  stopResWordsAutoRefresh();
+  resWordsInterval = setInterval(loadResWords, 4000);
+}
+function stopResWordsAutoRefresh() {
+  if (resWordsInterval) { clearInterval(resWordsInterval); resWordsInterval = null; }
+}
+
+async function loadResWords() {
+  let data;
+  try {
+    const res = await api('/api/admin/resiliance-games');
+    data = await res.json();
+  } catch (e) { return; }
+  const list = document.getElementById('res-words-list');
+  if (!list) return;
+  // On ne redessine pas les champs en cours d'édition pour ne pas perdre la
+  // saisie de l'admin entre deux rafraîchissements automatiques.
+  const focusedSubjectId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.subjectId : null;
+  if (focusedSubjectId) return;
+
+  list.innerHTML = '';
+  if (!data.games || data.games.length === 0) {
+    list.innerHTML = '<p class="subtitle">Aucune partie du jeu des problèmes en cours.</p>';
+    showScreen('resWords');
+    return;
+  }
+  data.games.forEach((g) => {
+    const row = document.createElement('div');
+    row.className = 'question-card';
+    let stateLabel;
+    if (g.state === 'lobby') stateLabel = 'En attente dans le lobby';
+    else if (g.state === 'writing') stateLabel = `Écriture des anecdotes — ${g.writingCount}/${g.writingTotal} ont terminé`;
+    else if (g.state === 'guessing') stateLabel = `Devinettes — manche ${g.round}/${g.totalRounds}`;
+    else stateLabel = g.state;
+
+    const anecdotesHtml = g.state === 'writing'
+      ? (g.anecdotes.length === 0
+        ? '<p class="subtitle" style="margin:6px 0;">Aucune anecdote reçue pour l\'instant.</p>'
+        : `<div class="res-mod-feed" style="max-height:none;">${g.anecdotes.map((a) => `
+            <div class="res-mod-card" data-code="${escapeHtml(g.code)}" data-subject-id="${escapeHtml(a.subjectId)}">
+              <div class="res-mod-card-head">
+                <span>À propos de <strong>${escapeHtml(a.subjectPseudo)}</strong> — écrite par ${escapeHtml(a.authorPseudo)}</span>
+              </div>
+              <textarea maxlength="200" rows="2" data-subject-id="${escapeHtml(a.subjectId)}">${escapeHtml(a.text)}</textarea>
+              <div class="res-mod-card-actions">
+                <span class="res-mod-saved-tag">✅ Enregistré</span>
+                <button class="res-mod-save-btn btn-save-anecdote" disabled>Enregistrer la correction</button>
+              </div>
+            </div>
+          `).join('')}</div>`)
+      : '';
+
+    const forceBtnHtml = g.state === 'writing'
+      ? `<button class="btn btn-ghost btn-force-guessing" style="width:auto; margin-top:10px;" data-code="${escapeHtml(g.code)}">Passer aux devinettes maintenant</button>`
+      : '';
+
+    row.innerHTML = `
+      <div class="qc-body" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <div style="display:flex; justify-content:space-between; gap:10px;">
+          <span>Partie <strong>${escapeHtml(g.code)}</strong> — ${g.playersCount} joueur(s)</span>
+        </div>
+        <div class="subtitle" style="margin:0;">${stateLabel}</div>
+        ${anecdotesHtml}
+        ${forceBtnHtml}
+      </div>
+    `;
+    list.appendChild(row);
+  });
+
+  list.querySelectorAll('textarea[data-subject-id]').forEach((textarea) => {
+    const card = textarea.closest('.res-mod-card');
+    const saveBtn = card.querySelector('.btn-save-anecdote');
+    const savedTag = card.querySelector('.res-mod-saved-tag');
+    const original = textarea.value;
+    textarea.addEventListener('input', () => {
+      saveBtn.disabled = textarea.value.trim() === '' || textarea.value === original;
+      savedTag.classList.remove('show');
+    });
+  });
+  list.querySelectorAll('.btn-save-anecdote').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const card = btn.closest('.res-mod-card');
+      const textarea = card.querySelector('textarea');
+      const clean = textarea.value.trim();
+      if (!clean) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/admin/resiliance-games/${card.dataset.code}/anecdote`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subjectId: card.dataset.subjectId, text: clean }),
+        });
+        card.querySelector('.res-mod-saved-tag').classList.add('show');
+        card.classList.add('saved');
+        setTimeout(() => card.classList.remove('saved'), 1200);
+      } catch (e) { btn.disabled = false; }
+    });
+  });
+  list.querySelectorAll('.btn-force-guessing').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api(`/api/admin/resiliance-games/${btn.dataset.code}/force-start-guessing`, { method: 'POST' });
+        loadResWords();
+      } catch (e) { btn.disabled = false; }
+    });
+  });
+
+  showScreen('resWords');
 }
 
 // ---------- Classement général ----------
