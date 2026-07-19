@@ -39,12 +39,14 @@
 
   <!-- ÉCRAN 3 : écriture des anecdotes -->
   <div id="screen-writing" class="screen hidden">
-    <div class="lobby-wrap">
+    <div class="lobby-wrap" style="max-width:760px;">
       <div class="eyebrow">En ce moment</div>
       <h1 class="title-xl">Tout le monde écrit une anecdote sur un autre joueur...</h1>
       <p class="subtitle"><span id="writing-count">0</span> / <span id="writing-total">0</span> ont terminé</p>
+      <p class="subtitle" id="writing-mod-hint" style="color:var(--gold);">Relisez et corrigez si besoin les anecdotes ci-dessous avant de lancer les devinettes.</p>
+      <div class="res-mod-feed" id="writing-feed"></div>
       <div class="host-controls">
-        <button class="btn btn-ghost" id="btn-force-guessing" style="width:auto;">Passer aux devinettes maintenant</button>
+        <button class="btn btn-primary" id="btn-force-guessing" style="width:auto;">Passer aux devinettes maintenant</button>
       </div>
     </div>
   </div>

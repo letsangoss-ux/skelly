@@ -1078,6 +1078,82 @@ textarea.anecdote-input:focus { border-color: var(--gold); }
   text-align: left;
 }
 .res-guess-row.correct { border-color: var(--green); background: rgba(62,97,82,0.15); }
+
+/* ---------- MODÉRATION (jeu des problèmes) ---------- */
+.res-mod-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 20px;
+  padding-right: 4px;
+  text-align: left;
+}
+.res-mod-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(198,166,100,0.2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  animation: fadeIn 0.3s ease both;
+}
+.res-mod-card.saved { border-color: var(--green); }
+.res-mod-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--cream-dim);
+  margin-bottom: 8px;
+}
+.res-mod-card-head strong { color: var(--gold); font-weight: 700; }
+.res-mod-card textarea {
+  width: 100%;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(248,243,234,0.2);
+  color: var(--cream);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: none;
+  resize: none;
+  min-height: 64px;
+  transition: border-color 0.2s ease;
+}
+.res-mod-card textarea:focus { border-color: var(--gold); }
+.res-mod-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.res-mod-save-btn {
+  background: var(--gold);
+  color: #16130F;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.res-mod-save-btn:disabled { opacity: 0.4; cursor: default; }
+.res-mod-saved-tag {
+  font-size: 0.78rem;
+  color: var(--green);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.res-mod-saved-tag.show { opacity: 1; }
+.res-mod-empty {
+  text-align: center;
+  color: var(--cream-dim);
+  font-size: 0.85rem;
+  padding: 10px;
+}
 .res-guess-row.wrong { border-color: rgba(140,59,59,0.4); }
 .res-guess-arrow { color: var(--cream-dim); }
 .res-guess-mark { margin-left: auto; font-size: 1.1rem; }
@@ -1374,6 +1450,51 @@ textarea.anecdote-input:focus { border-color: var(--gold); }
 }
 .draw-feed-dark .draw-feed-row { background: rgba(255,255,255,0.05); color: #e8e0d0; }
 .draw-feed-dark .draw-feed-row.correct { background: rgba(198,166,100,0.15); color: var(--gold); }
+
+/* ---------- MODÉRATION (dessin) ---------- */
+.mod-fab {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 500;
+  background: var(--gold);
+  color: #16130F;
+  border: none;
+  border-radius: 30px;
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.mod-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,8,6,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+  padding: 20px;
+}
+.mod-modal-inner {
+  background: #16130F;
+  border: 1px solid rgba(198,166,100,0.3);
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 520px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+}
+.mod-feed-notice {
+  text-align: center;
+  color: var(--gold);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 8px 0;
+}
 
 /* ---------- ACCUEIL — flux en 2 étapes (rôle puis jeu) ---------- */
 .home-role-choice {

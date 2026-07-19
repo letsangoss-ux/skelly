@@ -48,15 +48,87 @@ socket.on('res:error', ({ message }) => {
 });
 
 // ---------- Écriture ----------
+// Panneau de modération : l'animateur voit chaque anecdote arriver en direct
+// (comme le flux de la manche de dessin) et peut corriger le texte tant que
+// la partie n'est pas passée aux devinettes, pour éviter tout contenu
+// inapproprié.
 socket.on('res:writing-started', () => {
   document.getElementById('writing-count').textContent = '0';
+  document.getElementById('writing-feed').innerHTML = '';
+  document.getElementById('writing-mod-hint').classList.remove('hidden');
+  const btn = document.getElementById('btn-force-guessing');
+  btn.textContent = 'Passer aux devinettes maintenant';
+  btn.classList.remove('btn-primary');
+  btn.classList.add('btn-ghost');
   showScreen('writing');
 });
 socket.on('res:writing-progress', ({ count, total }) => {
   document.getElementById('writing-count').textContent = count;
   document.getElementById('writing-total').textContent = total;
 });
+socket.on('res:writing-all-done', () => {
+  const btn = document.getElementById('btn-force-guessing');
+  btn.textContent = 'Tout le monde a fini — Lancer les devinettes →';
+  btn.classList.add('btn-primary');
+  btn.classList.remove('btn-ghost');
+});
 document.getElementById('btn-force-guessing').addEventListener('click', () => socket.emit('res:force-start-guessing'));
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+function makeAnecdoteCard({ subjectId, subjectPseudo, subjectAvatar, authorPseudo, text }) {
+  const card = document.createElement('div');
+  card.className = 'res-mod-card';
+  card.dataset.subjectId = subjectId;
+  card.innerHTML = `
+    <div class="res-mod-card-head">
+      <img class="avatar-img-sm" src="${escapeHtml(subjectAvatar)}">
+      <span>À propos de <strong>${escapeHtml(subjectPseudo)}</strong> — écrite par ${escapeHtml(authorPseudo)}</span>
+    </div>
+    <textarea maxlength="200" rows="2"></textarea>
+    <div class="res-mod-card-actions">
+      <span class="res-mod-saved-tag">✅ Enregistré</span>
+      <button class="res-mod-save-btn" disabled>Enregistrer la correction</button>
+    </div>
+  `;
+  const textarea = card.querySelector('textarea');
+  const saveBtn = card.querySelector('.res-mod-save-btn');
+  const savedTag = card.querySelector('.res-mod-saved-tag');
+  textarea.value = text;
+  textarea.addEventListener('input', () => {
+    saveBtn.disabled = textarea.value.trim() === '' || textarea.value === card.dataset.lastSaved;
+    savedTag.classList.remove('show');
+  });
+  saveBtn.addEventListener('click', () => {
+    const clean = textarea.value.trim();
+    if (!clean) return;
+    socket.emit('res:host-edit-anecdote', { subjectId, text: clean });
+  });
+  card.dataset.lastSaved = text;
+  return card;
+}
+
+socket.on('res:anecdote-submitted', (data) => {
+  const feed = document.getElementById('writing-feed');
+  const card = makeAnecdoteCard(data);
+  feed.appendChild(card);
+  feed.scrollTop = feed.scrollHeight;
+});
+
+socket.on('res:anecdote-edit-confirmed', ({ subjectId, text }) => {
+  const card = document.querySelector(`.res-mod-card[data-subject-id="${subjectId}"]`);
+  if (!card) return;
+  card.dataset.lastSaved = text;
+  card.querySelector('.res-mod-save-btn').disabled = true;
+  const tag = card.querySelector('.res-mod-saved-tag');
+  tag.classList.add('show');
+  card.classList.add('saved');
+  setTimeout(() => card.classList.remove('saved'), 1200);
+});
 
 // ---------- Devinettes (manches simultanées) ----------
 let allPlayersSnapshot = [];

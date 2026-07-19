@@ -233,6 +233,14 @@ async function loadDrawWords() {
       const row = document.createElement('div');
       row.className = 'question-card';
       const stateLabel = g.state === 'drawing' ? `Manche ${g.round}/${g.totalRounds} — ${escapeHtml(g.drawerPseudo || '?')} dessine` : (g.state === 'lobby' ? 'En attente dans le lobby' : g.state);
+      const playersHtml = (g.players || []).map((p) => `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0;">
+          <span>${escapeHtml(p.pseudo)} ${p.isModerator ? '🛡️' : ''}</span>
+          <button class="btn btn-ghost btn-toggle-mod" style="width:auto; padding:4px 10px; font-size:0.8rem;" data-code="${escapeHtml(g.code)}" data-player-id="${escapeHtml(p.playerId)}" data-is-mod="${p.isModerator ? '1' : '0'}">
+            ${p.isModerator ? 'Retirer modérateur' : 'Rendre modérateur'}
+          </button>
+        </div>
+      `).join('');
       row.innerHTML = `
         <div class="qc-body" style="flex-direction:column; align-items:stretch; gap:6px;">
           <div style="display:flex; justify-content:space-between; gap:10px;">
@@ -240,9 +248,23 @@ async function loadDrawWords() {
           </div>
           <div class="subtitle" style="margin:0;">${stateLabel}</div>
           ${g.currentWord ? `<div style="font-size:1.1rem;"><strong>Mot en cours :</strong> ${escapeHtml(g.currentWord)}</div>` : ''}
+          <div style="border-top:1px solid rgba(198,166,100,0.2); margin-top:6px; padding-top:6px;">${playersHtml || '<span class="subtitle">Aucun joueur.</span>'}</div>
         </div>
       `;
       list.appendChild(row);
+    });
+    list.querySelectorAll('.btn-toggle-mod').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const code = btn.dataset.code;
+        const playerId = btn.dataset.playerId;
+        const isMod = btn.dataset.isMod === '1';
+        await api(`/api/admin/draw-games/${code}/moderator`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId, isModerator: !isMod }),
+        });
+        loadDrawWords();
+      });
     });
   }
   showScreen('drawWords');

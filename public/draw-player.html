@@ -104,6 +104,28 @@
     </div>
   </div>
 
+  <!-- Bouton flottant de modération (visible uniquement pour les joueurs promus modérateurs) -->
+  <button id="btn-open-moderation" class="mod-fab hidden">🛡️ Modération</button>
+
+  <div id="moderation-modal" class="mod-modal hidden">
+    <div class="mod-modal-inner">
+      <h2 class="title-xl" style="font-size:1.3rem;">🛡️ Remplacer ce dessin</h2>
+      <p class="subtitle">Dessine par-dessus ou importe une photo depuis ta pellicule. Cette action est annoncée à toute la partie.</p>
+      <div class="draw-canvas-wrap" style="max-width:480px;">
+        <canvas id="mod-canvas" width="800" height="600"></canvas>
+      </div>
+      <div class="draw-toolbar">
+        <button class="btn btn-ghost" id="mod-btn-import" style="width:auto;">📷 Importer une photo</button>
+        <input type="file" id="mod-file-input" accept="image/*" class="hidden">
+        <button class="btn btn-ghost" id="mod-btn-clear" style="width:auto;">Effacer</button>
+      </div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-ghost" id="mod-btn-cancel">Annuler</button>
+        <button class="btn btn-primary" id="mod-btn-validate">✅ Valider le remplacement</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/draw-player.js"></script>
 </body>

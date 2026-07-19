@@ -117,6 +117,15 @@ socket.on('draw:guess-wrong', ({ pseudo, text }) => {
   feed.appendChild(row);
   feed.scrollTop = feed.scrollHeight;
 });
+socket.on('draw:moderation-notice', ({ message }) => {
+  const feed = document.getElementById('drawing-feed');
+  if (!feed) return;
+  const row = document.createElement('div');
+  row.className = 'mod-feed-notice';
+  row.textContent = message;
+  feed.appendChild(row);
+  feed.scrollTop = feed.scrollHeight;
+});
 
 // ---------- Fin de manche ----------
 socket.on('draw:round-end', ({ word, drawerPseudo, drawerPoints, results, round, total }) => {

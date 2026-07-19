@@ -12,7 +12,7 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { maxHttpBufferSize: 6 * 1024 * 1024 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'images')));
@@ -33,11 +33,10 @@ function loadConfig() { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'))
 function loadHistory() { return fs.existsSync(HISTORY_FILE) ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8')) : []; }
 function saveHistory(history) { fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2)); }
 function loadVotes() { return fs.existsSync(VOTES_FILE) ? JSON.parse(fs.readFileSync(VOTES_FILE, 'utf-8')) : []; }
-function saveVotes(votes) { fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2)); }
 
 // ------------------------------------------------------------
-// VOTE "Destin d'Alan" — chaque invité ne peut voter qu'une fois
-// (identifié par un voterId généré côté navigateur et stocké en localStorage)
+// VOTE "Destin d'Alan" — terminé, la logique de vote a été retirée du site.
+// On garde uniquement la lecture des résultats historiques pour l'admin.
 // ------------------------------------------------------------
 const VOTE_OPTIONS = [
   { id: 'alan', label: 'Alan reste président à vie' },
@@ -46,28 +45,6 @@ const VOTE_OPTIONS = [
   { id: 'andreane', label: "Andréane devient présidente jusqu'à ce qu'elle quitte Hugo" },
   { id: 'maxime', label: "Maxime devient président jusqu'à ce que Angel répare son œil accidenté" },
 ];
-const VOTE_OPTION_IDS = new Set(VOTE_OPTIONS.map((o) => o.id));
-
-app.get('/api/vote/options', (req, res) => res.json(VOTE_OPTIONS));
-
-app.get('/api/vote/status', (req, res) => {
-  const voterId = (req.query.voterId || '').toString();
-  if (!voterId) return res.json({ voted: false });
-  const votes = loadVotes();
-  const existing = votes.find((v) => v.voterId === voterId);
-  res.json({ voted: !!existing, choice: existing ? existing.choice : null });
-});
-
-app.post('/api/vote', (req, res) => {
-  const { voterId, choice } = req.body || {};
-  if (!voterId || typeof voterId !== 'string') return res.status(400).json({ error: 'Identifiant votant manquant.' });
-  if (!VOTE_OPTION_IDS.has(choice)) return res.status(400).json({ error: 'Choix invalide.' });
-  const votes = loadVotes();
-  if (votes.some((v) => v.voterId === voterId)) return res.status(409).json({ error: 'Vous avez déjà voté.' });
-  votes.push({ voterId, choice, date: new Date().toISOString() });
-  saveVotes(votes);
-  res.json({ ok: true });
-});
 
 app.get('/api/admin/votes', requireAdmin, (req, res) => {
   const votes = loadVotes();
@@ -226,9 +203,37 @@ app.get('/api/admin/draw-games', requireAdmin, (req, res) => {
         totalRounds: g.order.length || null,
         currentWord: g.currentWord || null,
         drawerPseudo: drawer ? drawer.pseudo : null,
+        players: Object.values(g.players).map((p) => ({
+          playerId: p.playerId,
+          pseudo: p.pseudo,
+          isModerator: !!p.isModerator,
+        })),
       };
     });
   res.json({ games: active });
+});
+
+// Promeut / rétrograde un joueur au rôle de modérateur pour une partie de dessin donnée.
+// L'action est annoncée en clair dans la partie (aucun camouflage) : tout le monde sait qu'un modérateur est présent.
+app.post('/api/admin/draw-games/:code/moderator', requireAdmin, (req, res) => {
+  const game = games[(req.params.code || '').toUpperCase()];
+  if (!game || game.mode !== 'draw') return res.status(404).json({ error: 'Partie introuvable.' });
+  const { playerId, isModerator } = req.body || {};
+  if (!playerId) return res.status(400).json({ error: 'playerId requis.' });
+
+  if (isModerator) game.moderatorPlayerIds.add(playerId);
+  else game.moderatorPlayerIds.delete(playerId);
+
+  const socketId = game.playerIdIndex[playerId];
+  const player = socketId ? game.players[socketId] : null;
+  if (player) {
+    player.isModerator = !!isModerator;
+    if (socketId) io.to(socketId).emit('draw:moderator-status', { isModerator: !!isModerator });
+    io.to(game.code).emit('draw:moderation-notice', {
+      message: isModerator ? `🛡️ ${player.pseudo} est désormais modérateur de cette partie.` : `${player.pseudo} n'est plus modérateur.`,
+    });
+  }
+  res.json({ ok: true });
 });
 
 app.get('/api/admin/global-leaderboard', requireAdmin, (req, res) => {
@@ -1326,9 +1331,40 @@ io.on('connection', (socket) => {
     game.anecdoteAuthors[subjectId] = socket.id;
     const count = Object.keys(game.anecdotes).length;
     const total = Object.keys(game.players).length;
+    const subject = game.players[subjectId];
+    const author = game.players[socket.id];
     io.to(game.hostSocketId).emit('res:writing-progress', { count, total });
+    // MODÉRATION : l'animateur voit chaque anecdote arriver en direct sur son
+    // panneau (comme le flux de la manche de dessin) pour pouvoir repérer et
+    // corriger tout contenu inapproprié avant que la partie ne continue.
+    io.to(game.hostSocketId).emit('res:anecdote-submitted', {
+      subjectId,
+      subjectPseudo: subject ? subject.pseudo : '?',
+      subjectAvatar: subject ? subject.avatar : '/avatars/avatar1.svg',
+      authorPseudo: author ? author.pseudo : '?',
+      text: clean,
+    });
     socket.emit('res:anecdote-received');
-    if (count >= total) resFinishWriting(game);
+    // BUGFIX/MODÉRATION : on ne bascule plus automatiquement vers les devinettes
+    // dès que tout le monde a soumis. On laisse à l'animateur une fenêtre pour
+    // relire (et au besoin corriger) les anecdotes déjà reçues avant de lancer
+    // la suite lui-même via 'res:force-start-guessing' (voir resiliance-host.js).
+    if (count >= total) io.to(game.hostSocketId).emit('res:writing-all-done');
+  });
+
+  // L'animateur peut corriger le texte d'une anecdote déjà envoyée tant que la
+  // partie est encore en phase d'écriture (avant que les devinettes ne
+  // démarrent et ne révèlent le texte aux joueurs). Sert à retirer tout
+  // contenu inapproprié repéré sur le panneau de modération.
+  socket.on('res:host-edit-anecdote', ({ subjectId, text }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'resiliance' || game.state !== 'writing') return;
+    if (socket.id !== game.hostSocketId) return;
+    if (game.anecdotes[subjectId] === undefined) return;
+    const clean = (text || '').trim().slice(0, 200);
+    if (!clean) return;
+    game.anecdotes[subjectId] = clean;
+    socket.emit('res:anecdote-edit-confirmed', { subjectId, text: clean });
   });
 
   socket.on('res:force-start-guessing', () => {
@@ -1809,6 +1845,7 @@ io.on('connection', (socket) => {
       code, mode: 'draw',
       hostSocketId: socket.id,
       players: {}, playerIdIndex: {},
+      moderatorPlayerIds: new Set(),
       state: 'lobby',
       order: [], roundIndex: 0,
       drawerSocketId: null,
@@ -1844,6 +1881,7 @@ io.on('connection', (socket) => {
       socket.data.code = code;
       socket.data.playerId = playerId;
       socket.emit('draw:joined', { code, pseudo: player.pseudo, avatar: player.avatar, reconnected: true });
+      if (game.moderatorPlayerIds.has(playerId)) { player.isModerator = true; socket.emit('draw:moderator-status', { isModerator: true }); }
       if (game.hostSocketId) io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
 
       if (game.state === 'drawing') {
@@ -1873,6 +1911,7 @@ io.on('connection', (socket) => {
     socket.data.code = code;
     socket.data.playerId = pid;
     socket.emit('draw:joined', { code, pseudo: cleanPseudo, avatar, playerId: pid });
+    if (game.moderatorPlayerIds.has(pid)) { game.players[socket.id].isModerator = true; socket.emit('draw:moderator-status', { isModerator: true }); }
     io.to(game.hostSocketId).emit('draw:player-joined', { players: drawPlayersForHost(game) });
   });
 
@@ -1892,6 +1931,18 @@ io.on('connection', (socket) => {
     game.order = Object.keys(game.players).sort(() => Math.random() - 0.5);
     game.roundIndex = 0;
     drawStartRound(game);
+  });
+
+  // Un modérateur remplace le dessin en cours (dessin par-dessus ou photo importée).
+  // Action toujours annoncée à toute la salle — jamais silencieuse.
+  socket.on('moderate:override', ({ dataUrl }) => {
+    const game = games[socket.data.code];
+    if (!game || game.mode !== 'draw') return;
+    const player = game.players[socket.id];
+    if (!player || !player.isModerator) return;
+    if (typeof dataUrl !== 'string' || dataUrl.length > 3_000_000) return;
+    io.to(game.code).emit('draw:sync', { dataUrl });
+    io.to(game.code).emit('draw:moderation-notice', { message: `🛡️ ${player.pseudo} (modérateur) a remplacé ce dessin — contenu non conforme.` });
   });
 
   socket.on('draw:stroke', (data) => {

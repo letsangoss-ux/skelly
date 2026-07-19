@@ -148,7 +148,16 @@ socket.on('draw:stroke', (data) => drawViewSegment(data));
 socket.on('draw:clear', () => { viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height); viewCtx.fillStyle = '#F8F3EA'; viewCtx.fillRect(0, 0, viewCanvas.width, viewCanvas.height); });
 socket.on('draw:sync', ({ dataUrl }) => {
   const img = new Image();
-  img.onload = () => { viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height); viewCtx.drawImage(img, 0, 0, viewCanvas.width, viewCanvas.height); };
+  img.onload = () => {
+    if (iAmDrawer) {
+      myCtx.clearRect(0, 0, myCanvas.width, myCanvas.height);
+      myCtx.drawImage(img, 0, 0, myCanvas.width, myCanvas.height);
+      strokeHistory = [];
+    } else {
+      viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height);
+      viewCtx.drawImage(img, 0, 0, viewCanvas.width, viewCanvas.height);
+    }
+  };
   img.src = dataUrl;
 });
 
@@ -538,3 +547,84 @@ socket.on('draw:host-left', () => {
   alert("L'animateur a quitté la partie.");
   window.location.href = '/index.html';
 });
+
+// ---------- Modération (visible uniquement pour les joueurs promus par l'admin) ----------
+let isModerator = false;
+const modFab = document.getElementById('btn-open-moderation');
+const modModal = document.getElementById('moderation-modal');
+const modCanvas = document.getElementById('mod-canvas');
+const modCtx = modCanvas.getContext('2d');
+let modDrawing = false;
+let modLastPoint = null;
+
+socket.on('draw:moderator-status', ({ isModerator: flag }) => {
+  isModerator = !!flag;
+  modFab.classList.toggle('hidden', !isModerator);
+});
+
+// Notice visible par TOUT LE MONDE quand un modérateur intervient — jamais silencieux.
+socket.on('draw:moderation-notice', ({ message }) => {
+  [document.getElementById('drawer-guess-feed'), document.getElementById('guess-feed')].forEach((feed) => {
+    if (!feed) return;
+    const row = document.createElement('div');
+    row.className = 'mod-feed-notice';
+    row.textContent = message;
+    feed.appendChild(row);
+    feed.scrollTop = feed.scrollHeight;
+  });
+});
+
+function modPointerPos(e) {
+  const rect = modCanvas.getBoundingClientRect();
+  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || null;
+  const clientX = t ? t.clientX : e.clientX;
+  const clientY = t ? t.clientY : e.clientY;
+  return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+}
+
+modFab.addEventListener('click', () => {
+  // Initialise le canvas de modération avec le dessin actuellement visible à l'écran
+  modCtx.clearRect(0, 0, modCanvas.width, modCanvas.height);
+  const sourceCanvas = iAmDrawer ? myCanvas : viewCanvas;
+  modCtx.drawImage(sourceCanvas, 0, 0, modCanvas.width, modCanvas.height);
+  modModal.classList.remove('hidden');
+});
+document.getElementById('mod-btn-cancel').addEventListener('click', () => modModal.classList.add('hidden'));
+document.getElementById('mod-btn-clear').addEventListener('click', () => {
+  modCtx.fillStyle = CANVAS_BG;
+  modCtx.fillRect(0, 0, modCanvas.width, modCanvas.height);
+});
+document.getElementById('mod-btn-import').addEventListener('click', () => document.getElementById('mod-file-input').click());
+document.getElementById('mod-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => { modCtx.clearRect(0, 0, modCanvas.width, modCanvas.height); modCtx.drawImage(img, 0, 0, modCanvas.width, modCanvas.height); };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+document.getElementById('mod-btn-validate').addEventListener('click', () => {
+  const dataUrl = modCanvas.toDataURL('image/png');
+  socket.emit('moderate:override', { dataUrl });
+  modModal.classList.add('hidden');
+});
+
+function modStart(e) { e.preventDefault(); modDrawing = true; modLastPoint = modPointerPos(e); }
+function modMove(e) {
+  if (!modDrawing) return;
+  e.preventDefault();
+  const p = modPointerPos(e);
+  drawSegmentOnCanvas(modCtx, modCanvas, modLastPoint, p, '#16130F', 0.014);
+  modLastPoint = p;
+}
+function modEnd() { modDrawing = false; modLastPoint = null; }
+modCanvas.addEventListener('mousedown', modStart);
+modCanvas.addEventListener('mousemove', modMove);
+window.addEventListener('mouseup', modEnd);
+modCanvas.addEventListener('touchstart', modStart, { passive: false });
+modCanvas.addEventListener('touchmove', modMove, { passive: false });
+modCanvas.addEventListener('touchend', modEnd);

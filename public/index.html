@@ -8,19 +8,8 @@
 </head>
 <body>
 
-  <!-- ÉTAPE 0 : vote spécial "Le destin d'Alan" (une fois par invité) -->
-  <div id="screen-vote" class="screen hidden">
-    <div class="card" style="max-width:560px; text-align:center;">
-      <div class="eyebrow">Vote spécial</div>
-      <h1 class="title-xl" style="font-size:2rem;">Le sort d'Alan</h1>
-      <p class="subtitle" style="text-align:left;">Alan ayant été un mauvais président ces derniers jours et ayant ainsi failli à sa mission qui est de vous divertir, le choix est laissé à vous, membres de la Team Skelly. Que doit-il advenir de son rôle ?</p>
-      <div class="btn-row" id="vote-options" style="margin-top:24px;"></div>
-      <div class="error-msg" id="vote-error"></div>
-    </div>
-  </div>
-
   <!-- ÉTAPE 1 : je rejoins ou j'anime -->
-  <div id="screen-role" class="screen hidden">
+  <div id="screen-role" class="screen">
     <div class="home-wrap">
       <header class="home-header">
         <div class="logo-mark home-logo">S</div>
@@ -85,75 +74,10 @@
   </div>
 
   <script>
-    const screenVote = document.getElementById('screen-vote');
     const screenRole = document.getElementById('screen-role');
     const screenGames = document.getElementById('screen-games');
     const gamesEyebrow = document.getElementById('games-eyebrow');
     let role = 'player';
-
-    // ---------- Vote spécial "Le destin d'Alan" ----------
-    function getVoterId() {
-      let id = localStorage.getItem('skellyVoterId');
-      if (!id) {
-        id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
-        localStorage.setItem('skellyVoterId', id);
-      }
-      return id;
-    }
-
-    function showHome() {
-      screenVote.classList.add('hidden');
-      screenRole.classList.remove('hidden');
-    }
-
-    async function initVote() {
-      const voterId = getVoterId();
-      try {
-        const statusRes = await fetch('/api/vote/status?voterId=' + encodeURIComponent(voterId));
-        const status = await statusRes.json();
-        if (status.voted) { showHome(); return; }
-
-        const optionsRes = await fetch('/api/vote/options');
-        const options = await optionsRes.json();
-        const container = document.getElementById('vote-options');
-        const errorEl = document.getElementById('vote-error');
-        container.innerHTML = '';
-        options.forEach((opt) => {
-          const btn = document.createElement('button');
-          btn.className = 'home-btn-primary';
-          btn.style.textAlign = 'left';
-          btn.textContent = opt.label;
-          btn.addEventListener('click', async () => {
-            container.querySelectorAll('button').forEach((b) => (b.disabled = true));
-            errorEl.textContent = '';
-            try {
-              const res = await fetch('/api/vote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voterId, choice: opt.id }),
-              });
-              const data = await res.json();
-              if (!res.ok) {
-                errorEl.textContent = data.error || 'Erreur lors du vote.';
-                container.querySelectorAll('button').forEach((b) => (b.disabled = false));
-                if (res.status === 409) showHome();
-                return;
-              }
-              showHome();
-            } catch (e) {
-              errorEl.textContent = 'Impossible de contacter le serveur.';
-              container.querySelectorAll('button').forEach((b) => (b.disabled = false));
-            }
-          });
-          container.appendChild(btn);
-        });
-        screenVote.classList.remove('hidden');
-      } catch (e) {
-        // En cas de souci réseau, on n'empêche pas l'accès au site
-        showHome();
-      }
-    }
-    initVote();
 
     function goToGames(chosenRole) {
       role = chosenRole;
